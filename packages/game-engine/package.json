@@ -1,0 +1,14 @@
+{
+  "name": "@chainmon/game-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pure framework-free core game logic for ChainMon (battle, capture, damage, exp, evolution)",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

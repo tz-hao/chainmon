@@ -1,0 +1,23 @@
+# ChainMon — local development PostgreSQL (Phase 9).
+# Local-only credentials; never reuse these in production.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: chainmon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: chainmon
+      POSTGRES_USER: chainmon
+      POSTGRES_PASSWORD: chainmon_local_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - chainmon_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chainmon -d chainmon"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  chainmon_pgdata:

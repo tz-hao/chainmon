@@ -1,0 +1,396 @@
+// ChainMon — Prisma schema (Phase 1)
+// PostgreSQL data model for the Web MVP.
+//
+// On-chain data (ownership, species, generation, DNA, rarity, evolution stage)
+// is mirrored in the contract (Phase 6); off-chain game state (EXP, HP,
+// battle state, gold, quests) lives here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Element {
+  FIRE
+  WATER
+  NATURE
+  ELECTRIC
+}
+
+enum Rarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum EncounterStatus {
+  ACTIVE
+  CAPTURED
+  FLED
+}
+
+// ---------- Accounts ----------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  walletAddress String?   @unique // canonical lowercase (checksum-validated before bind)
+  privyDid      String?   @unique
+  // Phase 7 wallet verification (single-use nonce challenge)
+  walletNonce          String?
+  walletNonceExpiresAt DateTime?
+  walletVerifiedAt     DateTime?
+  trainer       Trainer?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model Trainer {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nickname    String   @unique
+  gold        Int      @default(0)
+  wins        Int      @default(0)
+  battleCount Int      @default(0)
+  captures    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Pixel World (map name + tile position; saved throttled, not per-frame)
+  worldMap String  @default("chainmon-valley")
+  worldX   Int     @default(30)
+  worldY   Int     @default(24)
+  // Ball economy
+  lastDailySupplyAt  DateTime?
+  starterSupplyClaimed Boolean @default(false)
+
+  monsters      Monster[]
+  inventory     Inventory[]
+  battleRecords Battle[]
+  listings      MarketplaceListing[]
+  encounters    Encounter[]
+  teamSlots     TeamSlot[]
+
+  @@map("trainers")
+}
+
+// ---------- Pixel World (spawns & pickups) ----------
+
+// Server-authoritative wild monster spawns on the world map.
+// Reconciled lazily on /api/world/state (no background worker).
+model WorldSpawn {
+  id        String   @id @default(cuid())
+  speciesId Int
+  zoneId    String
+  x         Int
+  y         Int
+  level     Int
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@map("world_spawns")
+}
+
+// Pickup claims: unique per trainer + pickup key, cooldown server-side.
+model WorldPickupClaim {
+  id        String   @id @default(cuid())
+  trainerId String
+  pickupKey String
+  claimedAt DateTime @default(now())
+
+  @@unique([trainerId, pickupKey])
+  @@map("world_pickup_claims")
+}
+
+// ---------- Monsters ----------
+
+model MonsterSpecies {
+  id          Int     @id @default(autoincrement())
+  slug        String  @unique
+  name        String  @unique
+  element     Element
+  rarity      Rarity
+  baseHp      Int
+  baseAttack  Int
+  baseDefense Int
+  baseSpeed   Int
+  catchRate   Float   @default(0.3)
+  description String  @default("")
+  imageUrl    String?
+
+  evolvesFromId Int?
+  evolvesFrom   MonsterSpecies?  @relation("Evolution", fields: [evolvesFromId], references: [id])
+  evolvesTo     MonsterSpecies[] @relation("Evolution")
+  evolveLevel   Int?
+  evolveItem    String? // evolution material, e.g. "Fire Stone"
+
+  learnableSkills MonsterSpeciesSkill[]
+  monsters        Monster[]
+  encounters      Encounter[]
+
+  @@map("monster_species")
+}
+
+model Monster {
+  id         String  @id @default(cuid())
+  tokenId    String? @unique
+  speciesId  Int
+  species    MonsterSpecies @relation(fields: [speciesId], references: [id])
+  name       String
+  level      Int     @default(1)
+  exp        Int     @default(0)
+  hp         Int
+  attack     Int
+  defense    Int
+  speed      Int
+  dna        Json // MonsterDNA { attackGene, defenseGene, speedGene, hpGene, mutationGene } 0-100
+  generation Int     @default(1)
+
+  fatherId String?
+  motherId String?
+  father   Monster? @relation("Father", fields: [fatherId], references: [id], onDelete: SetNull)
+  mother   Monster? @relation("Mother", fields: [motherId], references: [id], onDelete: SetNull)
+  childrenFromFather Monster[] @relation("Father")
+  childrenFromMother Monster[] @relation("Mother")
+
+  ownerId String?
+  /// on-chain owner wallet (canonical lowercase) when owned outside ChainMon
+  onchainOwnerAddress String?
+  owner   Trainer? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  battleCount Int @default(0)
+  wins        Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  skills        MonsterSkill[]
+  battleEntries BattleMonster[]
+  listing       MarketplaceListing?
+  teamSlots     TeamSlot[]
+  evolutions    MonsterEvolution[]
+  onchainEvolutions OnchainEvolution[]
+
+  // Phase 7 NFT mint state machine
+  mintStatus          String    @default("OFFCHAIN") // OFFCHAIN | MINT_PENDING | MINT_SUBMITTED | MINT_CONFIRMED | MINT_FAILED
+  mintTxHash          String?
+  mintChainId         Int?
+  mintContractAddress String?
+  mintRecipient       String?
+  mintError           String?
+  mintSubmittedAt     DateTime?
+  mintConfirmedAt     DateTime?
+  mintUpdatedAt       DateTime?
+  ownershipMismatch   Boolean   @default(false)
+
+  @@map("monsters")
+}
+
+// ---------- Skills ----------
+
+model Skill {
+  id          Int    @id @default(autoincrement())
+  name        String @unique
+  element     Element
+  power       Int
+  accuracy    Int    @default(100)
+  description String @default("")
+
+  monsterSkills MonsterSkill[]
+  speciesSkills MonsterSpeciesSkill[]
+
+  @@map("skills")
+}
+
+// Learned skills of a specific monster instance (4-slot moveset).
+model MonsterSkill {
+  monsterId String
+  monster   Monster @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+  skillId   Int
+  skill     Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  slot      Int     @default(0)
+
+  @@id([monsterId, skillId])
+  @@map("monster_skills")
+}
+
+// Skills a species can learn, and at which level.
+model MonsterSpeciesSkill {
+  speciesId  Int
+  species    MonsterSpecies @relation(fields: [speciesId], references: [id], onDelete: Cascade)
+  skillId    Int
+  skill      Skill          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  learnLevel Int            @default(1)
+
+  @@id([speciesId, skillId])
+  @@map("monster_species_skills")
+}
+
+// ---------- Battles (Phase 4) ----------
+
+model Battle {
+  id           String   @id @default(cuid())
+  trainerId    String
+  trainer      Trainer  @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  opponentName String   @default("AI Trainer")
+  status       String   @default("active") // "active" | "completed"
+  turn         Int      @default(1)
+  winner       String? // "player" | "opponent"
+  result       String   @default("")
+  goldReward   Int      @default(0)
+  expReward    Int      @default(0)
+  state        Json // full BattleState snapshot (server-authoritative)
+  logs         Json     @default("[]") // BattleLogEntry[]
+  rewards      Json? // BattleRewardSettlement snapshot (set exactly once on completion)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  monsters BattleMonster[]
+
+  @@map("battles")
+}
+
+model BattleMonster {
+  id        String  @id @default(cuid())
+  battleId  String
+  battle    Battle  @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  monsterId String
+  monster   Monster @relation(fields: [monsterId], references: [id])
+  slot      Int     @default(0)
+  outcome   String  @default("") // "won" | "lost" | "fainted" | ...
+  expGained Int     @default(0)
+
+  @@map("battle_monsters")
+}
+
+// ---------- Encounters (Phase 3) ----------
+
+model Encounter {
+  id        String          @id @default(cuid())
+  trainerId String
+  trainer   Trainer         @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  regionId  String
+  speciesId Int
+  species   MonsterSpecies  @relation(fields: [speciesId], references: [id])
+  currentHp Int
+  maxHp     Int
+  status    EncounterStatus @default(ACTIVE)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("encounters")
+}
+
+// Battle team of a trainer: exactly 3 slots (Phase 4).
+model TeamSlot {
+  id        String  @id @default(cuid())
+  trainerId String
+  monsterId String
+  slot      Int // 1 | 2 | 3
+  trainer   Trainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  monster   Monster @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+
+  @@unique([trainerId, slot])
+  @@unique([trainerId, monsterId])
+  @@map("team_slots")
+}
+
+// Evolution history of a monster (Phase 5).
+model MonsterEvolution {
+  id            String   @id @default(cuid())
+  monsterId     String
+  monster       Monster  @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+  fromSpeciesId Int
+  toSpeciesId   Int
+  level         Int
+  createdAt     DateTime @default(now())
+
+  @@map("monster_evolutions")
+}
+
+// On-chain evolution jobs for MINT_CONFIRMED monsters (Phase 7).
+// One monster may evolve multiple times over its life — one job per evolution.
+model OnchainEvolution {
+  id              String   @id @default(cuid())
+  monsterId       String
+  monster         Monster  @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+  fromSpeciesId   Int
+  toSpeciesId     Int
+  fromStage       Int
+  toStage         Int
+  status          String   @default("EVOLUTION_PENDING") // EVOLUTION_PENDING | EVOLUTION_SUBMITTED | CHAIN_CONFIRMED | SYNCED | SYNC_FAILED
+  txHash          String?
+  chainId         Int?
+  contractAddress String?
+  error           String?
+  createdAt       DateTime @default(now())
+  submittedAt     DateTime?
+  confirmedAt     DateTime?
+  syncedAt        DateTime?
+
+  @@map("onchain_evolutions")
+}
+
+// ---------- Items & Inventory ----------
+
+model Item {
+  id          Int    @id @default(autoincrement())
+  slug        String @unique
+  name        String @unique
+  type        String // "ball" | "stone" | "potion" | ...
+  description String @default("")
+  value       Int    @default(0)
+
+  inventory Inventory[]
+
+  @@map("items")
+}
+
+model Inventory {
+  trainerId String
+  trainer   Trainer @relation(fields: [trainerId], references: [id], onDelete: Cascade)
+  itemId    Int
+  item      Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity  Int     @default(0)
+
+  @@id([trainerId, itemId])
+  @@map("inventory")
+}
+
+// ---------- Marketplace ----------
+
+model MarketplaceListing {
+  id        String   @id @default(cuid())
+  sellerId  String
+  seller    Trainer  @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  monsterId String   @unique
+  monster   Monster  @relation(fields: [monsterId], references: [id], onDelete: Cascade)
+  tokenId      String? // on-chain NFT token id (string, uint256-safe)
+  priceWei     BigInt
+  currency     String   @default("ETH")
+  // PENDING | ACTIVE | CANCEL_PENDING | CANCELLED | SALE_PENDING | SOLD | STALE | FAILED
+  status           String   @default("PENDING")
+  chainId          Int?
+  nftContractAddress String?
+  marketplaceAddress String?
+  listingTxHash    String?
+  cancelTxHash     String?
+  saleTxHash       String?
+  buyerWallet      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  soldAt           DateTime?
+  cancelAt         DateTime?
+
+  @@map("marketplace_listings")
+}

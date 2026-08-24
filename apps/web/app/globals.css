@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100 antialiased;
+}
+
+/* Subtle grid backdrop used on hero sections */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, rgb(148 163 184 / 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(148 163 184 / 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Capture ball shake animation (Phase 3) */
+@keyframes ball-shake {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  20% {
+    transform: translateX(-10px) rotate(-10deg);
+  }
+  40% {
+    transform: translateX(10px) rotate(10deg);
+  }
+  60% {
+    transform: translateX(-10px) rotate(-10deg);
+  }
+  80% {
+    transform: translateX(10px) rotate(10deg);
+  }
+}
+.animate-ball-shake {
+  animation: ball-shake 0.6s ease-in-out infinite;
+}
+
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-float-up {
+  animation: float-up 0.3s ease-out both;
+}

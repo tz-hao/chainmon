@@ -1,0 +1,12 @@
+{
+  "network": "monadTestnet",
+  "chainId": "10143",
+  "MonsterNFT": "0xdF47d90c13DC34e1Cd5530352B414E24f1A2A7C7",
+  "MonsterMarketplace": "0x51B61cDe32D4DC39Cd2bfA0ecf8B8D2eE5b38D64",
+  "deployer": "0xb22a98624799EC7fb1180274B8E51789BB299e4A",
+  "monsterNftDeploymentTx": "0x36e1e1cd874d722c11fa6f9d59f1d5d8e9b82367bf23f13b02c376d10a3f0328",
+  "marketplaceDeploymentTx": "0xe3fc8cdfb22e3d747f76db07b0ba8e8d38a52b0ffa6c62462fd7d568bb025e2a",
+  "blockNumber": 54554021,
+  "deployedAt": "2026-08-17T16:19:41.001Z",
+  "contractVersion": "1.0.0"
+}

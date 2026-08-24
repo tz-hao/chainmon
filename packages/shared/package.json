@@ -1,0 +1,14 @@
+{
+  "name": "@chainmon/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Core domain types and constants shared across ChainMon",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}
