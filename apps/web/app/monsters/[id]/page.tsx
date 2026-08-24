@@ -88,10 +88,6 @@ export default async function MonsterDetailPage({
               height={192}
               className="h-48 w-48 object-contain"
               style={{ imageRendering: "pixelated" }}
-              onError={(e) => {
-                e.currentTarget.src = species?.image ?? "/monsters/placeholder.svg";
-                e.currentTarget.style.imageRendering = "auto";
-              }}
             />
           </div>
           <h1 className="mt-4 text-2xl font-bold text-slate-100">
