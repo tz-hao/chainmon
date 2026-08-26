@@ -47,6 +47,7 @@ the release schema.
 | `CHAINMON_MONSTER_MARKETPLACE_ADDRESS` | ✅ | Deployed `MonsterMarketplace` address |
 | `CHAINMON_MINTER_PRIVATE_KEY` | ✅ | **Server-only.** Backend operator key (MINTER + EVOLVER). Use Vercel Env / Secret Manager / KMS. Never commit, never log. |
 | `NEXT_PUBLIC_CHAINMON_CHAIN_ID` | ✅ | `10143` |
+| `NEXT_PUBLIC_CHAINMON_RPC_URL` | ✅ | Browser-safe mirror of the Monad Testnet RPC URL |
 | `NEXT_PUBLIC_MONSTER_NFT_ADDRESS` | ✅ | Client-side mirror of the NFT contract |
 | `NEXT_PUBLIC_MONSTER_MARKETPLACE_ADDRESS` | ✅ | Client-side mirror of the marketplace |
 | `NEXT_PUBLIC_BLOCK_EXPLORER_URL` | ✅ | `https://testnet.monadscan.com` |
@@ -200,6 +201,7 @@ CHAINMON_MONSTER_MARKETPLACE_ADDRESS=<from deployments/monadTestnet.json>
 CHAINMON_MINTER_PRIVATE_KEY=<operator key with MINTER+EVOLVER>
 CHAINMON_SESSION_SECRET=<32+ random server-only bytes>
 NEXT_PUBLIC_CHAINMON_CHAIN_ID=10143
+NEXT_PUBLIC_CHAINMON_RPC_URL=https://testnet-rpc.monad.xyz
 NEXT_PUBLIC_MONSTER_NFT_ADDRESS=<same NFT address>
 NEXT_PUBLIC_MONSTER_MARKETPLACE_ADDRESS=<same marketplace address>
 NEXT_PUBLIC_BLOCK_EXPLORER_URL=https://testnet.monadscan.com
