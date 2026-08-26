@@ -88,7 +88,7 @@ export async function saveBattleTeam(
     throw new BattleError("Team monsters must be different.");
   }
 
-  const owned = await repository.listMonsters();
+  const owned = await repository.listMonsters(trainerId);
   const ownedIds = new Set(owned.map((m) => m.id));
   for (const id of monsterIds) {
     if (!ownedIds.has(id)) {

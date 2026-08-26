@@ -11,7 +11,6 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   let body: {
-    trainerId?: string;
     monsterId?: string;
     txHash?: string;
     priceWei?: string;
@@ -34,9 +33,6 @@ export async function POST(request: Request) {
   try {
     const repository = await getRepository();
     const trainerId = await requireAuthenticatedTrainer(repository);
-    if (body.trainerId && body.trainerId !== trainerId) {
-      return NextResponse.json({ error: "Wallet session does not match this trainer." }, { status: 403 });
-    }
     const gateway = getChainGateway();
     const listing = await listMonster(
       repository,

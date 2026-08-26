@@ -39,15 +39,11 @@ const FEATURES = [
   },
 ] as const;
 
-const PHASES = [
-  { n: 1, label: "Scaffold · DB · UI", done: true },
-  { n: 2, label: "28 Species", done: false },
-  { n: 3, label: "Explore & Capture", done: false },
-  { n: 4, label: "3v3 Battle", done: false },
-  { n: 5, label: "Level & Evolve", done: false },
-  { n: 6, label: "NFT Contract", done: false },
-  { n: 7, label: "Web3 Wallet", done: false },
-  { n: 8, label: "Marketplace", done: false },
+const ONBOARDING = [
+  "连接你的 EVM 钱包",
+  "主动签署可读的登录消息",
+  "选择一张像素世界地图",
+  "捕捉、收集、组队与战斗",
 ] as const;
 
 export default function HomePage() {
@@ -57,27 +53,26 @@ export default function HomePage() {
       <section className="bg-grid relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/60 px-6 py-20 text-center">
         <div className="relative">
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">
-            Web3 Monster Collecting Game
+            Pixel RPG × Monster Collection × On-chain Ownership
           </p>
           <h1 className="mt-4 bg-gradient-to-r from-amber-300 via-orange-400 to-red-400 bg-clip-text text-5xl font-black tracking-tight text-transparent md:text-6xl">
             ChainMon
           </h1>
           <p className="mx-auto mt-4 max-w-xl text-slate-300">
-            Catch monsters. Train your team. Fight 3v3 battles. Evolve them —
-            and own them forever as NFTs on-chain.
+            从连接钱包开始你的个人冒险。探索四张像素世界，捕捉 ChainMon、训练队伍，并在你主动选择时体验链上所有权。
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
               href="/login"
               className="rounded-xl bg-amber-500 px-6 py-3 font-semibold text-slate-950 transition-colors hover:bg-amber-400"
             >
-              Start Playing
+              连接钱包
             </Link>
             <Link
-              href="/dashboard"
+              href="/monsters"
               className="rounded-xl border border-slate-700 bg-slate-800/60 px-6 py-3 font-semibold text-slate-200 transition-colors hover:bg-slate-800"
             >
-              View Dashboard
+              查看图鉴
             </Link>
           </div>
         </div>
@@ -115,26 +110,14 @@ export default function HomePage() {
           </div>
         ))}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <h3 className="font-semibold text-slate-100">Development Roadmap</h3>
+          <h3 className="font-semibold text-slate-100">新玩家流程</h3>
           <ul className="mt-3 space-y-1.5">
-            {PHASES.map((phase) => (
-              <li key={phase.n} className="flex items-center gap-2 text-sm">
-                <span
-                  className={`grid h-5 w-5 place-items-center rounded-full text-[10px] font-bold ${
-                    phase.done
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-slate-800 text-slate-500"
-                  }`}
-                >
-                  {phase.done ? "✓" : phase.n}
+            {ONBOARDING.map((step, index) => (
+              <li key={step} className="flex items-center gap-2 text-sm">
+                <span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-500/20 text-[10px] font-bold text-emerald-400">
+                  {index + 1}
                 </span>
-                <span
-                  className={
-                    phase.done ? "text-emerald-300" : "text-slate-400"
-                  }
-                >
-                  {phase.label}
-                </span>
+                <span className="text-slate-300">{step}</span>
               </li>
             ))}
           </ul>

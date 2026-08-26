@@ -10,17 +10,11 @@ import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/tra
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const requestedTrainerId = new URL(request.url).searchParams.get("trainerId");
+  const mine = new URL(request.url).searchParams.get("mine") === "1";
   try {
     const repository = await getRepository();
     const gateway = getChainGateway();
-    let trainerId: string | null = null;
-    if (requestedTrainerId) {
-      trainerId = await requireAuthenticatedTrainer(repository);
-      if (trainerId !== requestedTrainerId) {
-        return NextResponse.json({ error: "Wallet session does not match this trainer." }, { status: 403 });
-      }
-    }
+    const trainerId = mine ? await requireAuthenticatedTrainer(repository) : null;
     const listings = trainerId
       ? await getMyListings(repository, trainerId)
       : await getForSaleListings(repository, gateway);

@@ -6,7 +6,7 @@ import type {
   BattleState,
 } from "@chainmon/game-engine";
 import type { BattleRewardSettlement } from "@/lib/data";
-import { getRepository } from "@/lib/data";
+import { getCurrentTrainer } from "@/lib/auth/current-trainer";
 import {
   BattleError,
   submitBattleAction,
@@ -34,11 +34,7 @@ export interface SubmitActionInput {
 export async function submitAction(
   input: SubmitActionInput,
 ): Promise<SubmitActionResult> {
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  if (!trainer) {
-    return { ok: false, error: "Create a trainer first." };
-  }
+  const { repository, trainer } = await getCurrentTrainer();
 
   try {
     const result = await submitBattleAction(repository, {

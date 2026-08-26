@@ -101,7 +101,7 @@ export async function claimNft(
   trainerId: string,
   monsterId: string,
 ): Promise<ClaimResult> {
-  const monster = await repository.getMonster(monsterId);
+  const monster = await repository.getMonsterPublic(monsterId);
   if (!monster) throw new ClaimError("Monster not found.");
   if (monster.owner !== trainerId) {
     throw new ClaimError("You don't own this monster.");
@@ -155,7 +155,7 @@ export async function claimNft(
   // 2. CAS mint lock (double-click / tabs / retries → one transaction).
   const lock = await repository.tryAcquireMintLock(monsterId);
   if (lock === "confirmed") {
-    const current = await repository.getMonster(monsterId);
+    const current = await repository.getMonster(monsterId, trainerId);
     return { status: "MINT_CONFIRMED", tokenId: current?.tokenId };
   }
   if (lock === "in-progress") {
@@ -227,7 +227,7 @@ export async function refreshMintStatus(
   trainerId: string,
   monsterId: string,
 ): Promise<ClaimResult> {
-  const monster = await repository.getMonster(monsterId);
+  const monster = await repository.getMonsterPublic(monsterId);
   if (!monster) throw new ClaimError("Monster not found.");
   if (monster.owner !== trainerId) {
     throw new ClaimError("You don't own this monster.");

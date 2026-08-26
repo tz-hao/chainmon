@@ -2,29 +2,26 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MONSTER_SPECIES } from "@chainmon/monster-data";
 import { BattleArena } from "@/components/BattleArena";
-import { DemoModeNote } from "@/components/DemoModeNote";
 import { PageHeader } from "@/components/PageHeader";
-import { getRepository } from "@/lib/data";
+import { requirePageTrainer } from "@/lib/auth/current-trainer";
 import { BattleError, getBattle } from "@/lib/services/battle-service";
 import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
 
 export const dynamic = "force-dynamic";
 
 interface BattleArenaPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function BattleArenaPage({
   params,
 }: BattleArenaPageProps) {
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
+  const { id } = await params;
+  const { repository, trainer } = await requirePageTrainer();
 
   let record;
   try {
-    record = trainer
-      ? await getBattle(repository, trainer.id, params.id)
-      : null;
+    record = await getBattle(repository, trainer.id, id);
   } catch (error) {
     if (error instanceof BattleError) {
       notFound();
@@ -60,11 +57,6 @@ export default async function BattleArenaPage({
           initialRewards={record.rewards ?? null}
         />
       </div>
-      {repository.kind === "memory" ? (
-        <div className="mt-6">
-          <DemoModeNote />
-        </div>
-      ) : null}
     </div>
   );
 }

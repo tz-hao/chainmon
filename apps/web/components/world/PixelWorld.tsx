@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Phaser from "phaser";
 import type { WorldStateResponse } from "@/lib/world/world-types";
@@ -31,6 +32,7 @@ interface InteractTarget {
  * Phaser drives movement; React handles HUD, modals and API calls.
  */
 export function PixelWorld(_props: PixelWorldProps) {
+  const router = useRouter();
   const [worldState, setWorldState] = useState<WorldStateResponse | null>(null);
   const [worldLoadError, setWorldLoadError] = useState<string | null>(null);
   const [worldRevision, setWorldRevision] = useState(0);
@@ -49,8 +51,10 @@ export function PixelWorld(_props: PixelWorldProps) {
   } | null>(null);
   const [shopOpen, setShopOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const [dailyBusy, setDailyBusy] = useState(false);
   const busyRef = useRef(false);
+  const tutorialTrainerRef = useRef<string | null>(null);
 
   const onGameReady = useCallback((_game: Phaser.Game) => undefined, []);
 
@@ -72,6 +76,21 @@ export function PixelWorld(_props: PixelWorldProps) {
       setWorldLoadError(error instanceof Error ? error.message : "World temporarily unavailable.");
     });
   }, [refreshWorldState]);
+
+  // A trainer sees this once per browser. The Guide button remains available
+  // after dismissal, so the first visit is helpful without becoming a wall.
+  useEffect(() => {
+    const trainerId = worldState?.trainer.id;
+    if (!trainerId || tutorialTrainerRef.current === trainerId) return;
+    tutorialTrainerRef.current = trainerId;
+    try {
+      if (!window.localStorage.getItem(`chainmon:world-tutorial:${trainerId}`)) {
+        setTutorialOpen(true);
+      }
+    } catch {
+      setTutorialOpen(true);
+    }
+  }, [worldState?.trainer.id]);
 
   // Phaser → React event bridge
   useEffect(() => {
@@ -206,9 +225,26 @@ export function PixelWorld(_props: PixelWorldProps) {
         window.dispatchEvent(new CustomEvent("world-toast", { detail: { message: "Could not leave this encounter. Try again." } }));
         return;
       }
+      // Keep the current Phaser scene after a Run. Recreating it while the
+      // trainer is still beside the same spawn would immediately re-trigger
+      // the proximity encounter and make Run feel broken.
+      setEncounter(null);
+      return;
     }
     setEncounter(null);
     await refreshWorldState();
+  }
+
+  function closeTutorial() {
+    const trainerId = worldState?.trainer.id;
+    if (trainerId) {
+      try {
+        window.localStorage.setItem(`chainmon:world-tutorial:${trainerId}`, "seen");
+      } catch {
+        // The tutorial still closes when storage is unavailable.
+      }
+    }
+    setTutorialOpen(false);
   }
 
   if (!worldState) {
@@ -216,7 +252,7 @@ export function PixelWorld(_props: PixelWorldProps) {
       <div className="flex h-full w-full items-center justify-center bg-slate-950 p-6 text-center">
         <div className="max-w-sm rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl">
           <p className="text-sm font-semibold text-slate-100">
-            {worldLoadError ? "ChainMon Valley is temporarily unavailable." : "Loading ChainMon Valley..."}
+            {worldLoadError ? "World is temporarily unavailable." : "Loading your world..."}
           </p>
           {worldLoadError ? (
             <>
@@ -247,6 +283,8 @@ export function PixelWorld(_props: PixelWorldProps) {
         worldState={worldState}
         zoneName={zoneName}
         onClaimDaily={() => void claimDailySupply()}
+        onOpenGuide={() => setGuideOpen(true)}
+        onOpenMap={() => router.push("/world/select")}
         dailyBusy={dailyBusy}
       />
 
@@ -254,6 +292,7 @@ export function PixelWorld(_props: PixelWorldProps) {
       {encounter ? (
         <EncounterOverlay
           encounter={encounter}
+          inventory={worldState.inventory}
           onClose={() => void handleEncounterClosed(true)}
           onCaptured={() => void handleEncounterClosed()}
         />
@@ -261,7 +300,6 @@ export function PixelWorld(_props: PixelWorldProps) {
 
       {shopOpen ? (
         <ShopOverlay
-          trainerId={worldState.trainer.id}
           gold={worldState.trainer.gold}
           onClose={() => {
             setShopOpen(false);
@@ -271,17 +309,16 @@ export function PixelWorld(_props: PixelWorldProps) {
       ) : null}
 
       {guideOpen ? (
-        <GuideOverlay
-          onClose={() => setGuideOpen(false)}
-          dailyReady={worldState.dailySupply.ready}
-          dailyBusy={dailyBusy}
-          onClaimDaily={() => void claimDailySupply()}
-        />
+        <GuideOverlay onClose={() => setGuideOpen(false)} />
+      ) : null}
+
+      {tutorialOpen ? (
+        <GuideOverlay variant="first-visit" onClose={closeTutorial} />
       ) : null}
 
       {/* bottom controls hint */}
       <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-lg bg-slate-900/80 px-3 py-1 text-[11px] text-slate-300">
-        WASD / Arrows Move · E Interact · ESC Close
+        WASD / Arrows Move · Touch WILD to Encounter · E Interact · ESC Close
       </div>
     </div>
   );

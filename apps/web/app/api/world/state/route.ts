@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/data";
+import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/trainer-session";
 import { reconcileWorldSpawns, getPickupReward } from "@/lib/services/world-service";
 import { PICKUP_COOLDOWN_MS, DAILY_SUPPLY_COOLDOWN_MS } from "@/lib/world/world-config";
 import { DAILY_SUPPLY_ITEMS } from "@/lib/services/world-service";
-import { buildChainMonValley } from "@/lib/world/map-data";
+import { buildWorldMap } from "@/lib/world/map-data";
+import { normalizeWorldMapId } from "@/lib/world/world-maps";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +17,21 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const repository = await getRepository();
-    const trainer = await repository.getDemoTrainer();
-    const spawns = await reconcileWorldSpawns(repository);
+    const trainerId = await requireAuthenticatedTrainer(repository);
+    const trainer = await repository.getTrainerById(trainerId);
+    if (!trainer) throw new TrainerSessionError();
+    const position = await repository.getTrainerWorldPosition(trainer.id);
+    const worldMap = normalizeWorldMapId(position?.worldMap);
+    const map = buildWorldMap(worldMap);
+    if (position?.worldMap !== worldMap) {
+      await repository.saveTrainerWorldPosition(trainer.id, {
+        worldMap,
+        worldX: map.spawnPoint.x,
+        worldY: map.spawnPoint.y,
+      });
+    }
+    const spawns = await reconcileWorldSpawns(repository, worldMap);
 
-    const map = buildChainMonValley();
     const now = new Date();
     const pickups = map.pickups.map((p) => ({
       ...p,
@@ -34,50 +47,41 @@ export async function GET() {
       nextAt: null as string | null,
     }));
 
-    if (trainer) {
-      const claims = await repository.getPickupClaims(trainer.id);
-      for (const pickup of pickups) {
-        const claim = claims.find((c) => c.pickupKey === pickup.pickupKey);
-        if (claim) {
-          const elapsed = now.getTime() - claim.claimedAt.getTime();
-          const remaining = PICKUP_COOLDOWN_MS - elapsed;
-          pickup.available = remaining <= 0;
-          pickup.nextAt = remaining > 0 ? new Date(now.getTime() + remaining).toISOString() : null;
-        }
+    const claims = await repository.getPickupClaims(trainer.id);
+    for (const pickup of pickups) {
+      const claim = claims.find((c) => c.pickupKey === pickup.pickupKey);
+      if (claim) {
+        const elapsed = now.getTime() - claim.claimedAt.getTime();
+        const remaining = PICKUP_COOLDOWN_MS - elapsed;
+        pickup.available = remaining <= 0;
+        pickup.nextAt = remaining > 0 ? new Date(now.getTime() + remaining).toISOString() : null;
       }
     }
-
-    const position = trainer
-      ? await repository.getTrainerWorldPosition(trainer.id)
-      : null;
 
     let dailySupply = { ready: false, nextAt: null as string | null };
-    if (trainer) {
-      const ds = await repository.getDailySupplyState(trainer.id);
-      if (!ds.lastClaimedAt) {
-        dailySupply = { ready: true, nextAt: null };
-      } else {
-        const elapsed = now.getTime() - ds.lastClaimedAt.getTime();
-        const remaining = DAILY_SUPPLY_COOLDOWN_MS - elapsed;
-        dailySupply = {
-          ready: remaining <= 0,
-          nextAt:
-            remaining > 0 ? new Date(now.getTime() + remaining).toISOString() : null,
-        };
-      }
+    const ds = await repository.getDailySupplyState(trainer.id);
+    if (!ds.lastClaimedAt) {
+      dailySupply = { ready: true, nextAt: null };
+    } else {
+      const elapsed = now.getTime() - ds.lastClaimedAt.getTime();
+      const remaining = DAILY_SUPPLY_COOLDOWN_MS - elapsed;
+      dailySupply = {
+        ready: remaining <= 0,
+        nextAt:
+          remaining > 0 ? new Date(now.getTime() + remaining).toISOString() : null,
+      };
     }
 
-    const inventory = trainer
-      ? await repository.getInventory(trainer.id)
-      : [];
+    const inventory = await repository.getInventory(trainer.id);
 
     return NextResponse.json({
       trainer: {
-        id: trainer?.id ?? "",
-        nickname: trainer?.nickname ?? "Trainer",
-        gold: trainer?.gold ?? 0,
-        worldX: position?.worldX ?? 30,
-        worldY: position?.worldY ?? 24,
+        id: trainer.id,
+        nickname: trainer.nickname,
+        gold: trainer.gold,
+        worldMap,
+        worldX: position?.worldMap === worldMap ? position.worldX : map.spawnPoint.x,
+        worldY: position?.worldMap === worldMap ? position.worldY : map.spawnPoint.y,
         zoneId: null,
       },
       spawns: spawns
@@ -95,7 +99,10 @@ export async function GET() {
       dailySupply,
       inventory: inventory.map((i) => ({ slug: i.slug, quantity: i.quantity })),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof TrainerSessionError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "World temporarily unavailable." },
       { status: 503 },

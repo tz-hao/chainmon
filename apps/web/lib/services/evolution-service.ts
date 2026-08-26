@@ -34,7 +34,7 @@ export async function evolveMonster(
   trainerId: string,
   monsterId: string,
 ): Promise<EvolutionResult> {
-  const monster = await repository.getMonster(monsterId);
+  const monster = await repository.getMonsterPublic(monsterId);
   if (!monster) {
     throw new EvolutionError("Monster not found.");
   }

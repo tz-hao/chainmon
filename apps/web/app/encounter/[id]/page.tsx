@@ -1,26 +1,25 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSpeciesById } from "@chainmon/monster-data";
-import { DemoModeNote } from "@/components/DemoModeNote";
 import { EncounterPanel } from "@/components/EncounterPanel";
 import { PageHeader } from "@/components/PageHeader";
-import { getRepository } from "@/lib/data";
+import { requirePageTrainer } from "@/lib/auth/current-trainer";
 
 export const dynamic = "force-dynamic";
 
 interface EncounterPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function EncounterPage({ params }: EncounterPageProps) {
-  const repository = await getRepository();
-  const encounter = await repository.getEncounterById(params.id);
-  if (!encounter) {
+  const { id } = await params;
+  const { repository, trainer } = await requirePageTrainer();
+  const encounter = await repository.getEncounterById(id);
+  if (!encounter || encounter.trainerId !== trainer.id) {
     notFound();
   }
 
-  const trainer = await repository.getDemoTrainer();
-  const inventory = trainer ? await repository.getInventory(trainer.id) : [];
+  const inventory = await repository.getInventory(trainer.id);
   const species = getSpeciesById(encounter.speciesId);
 
   if (encounter.status !== "active") {
@@ -43,10 +42,10 @@ export default async function EncounterPage({ params }: EncounterPageProps) {
               : "You ran away. The wild monster is gone."}
           </p>
           <Link
-            href="/explore"
+            href="/world/select"
             className="mt-6 inline-block rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
           >
-            Back to Explore
+            Back to Worlds
           </Link>
         </div>
       </div>
@@ -65,11 +64,6 @@ export default async function EncounterPage({ params }: EncounterPageProps) {
         species={species}
         inventory={inventory}
       />
-      {repository.kind === "memory" ? (
-        <div className="mt-6">
-          <DemoModeNote />
-        </div>
-      ) : null}
     </div>
   );
 }

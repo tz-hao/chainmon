@@ -27,7 +27,8 @@ import type {
   RewardSettleContext,
   SubmitRoundInput,
   SubmitRoundResult,
-  WalletChallenge,
+  WalletLoginChallenge,
+  WalletPlayerResult,
   WorldItemGrant,
   WorldPickupClaimRecord,
   WorldReward,
@@ -61,7 +62,8 @@ export type {
   RewardSettleContext,
   SubmitRoundInput,
   SubmitRoundResult,
-  WalletChallenge,
+  WalletLoginChallenge,
+  WalletPlayerResult,
   WorldItemGrant,
   WorldPickupClaimRecord,
   WorldReward,
@@ -86,6 +88,11 @@ export function getRepository(): Promise<GameRepository> {
 
 async function resolveRepository(): Promise<GameRepository> {
   const mode = process.env.CHAINMON_DATA_MODE;
+  if (process.env.NODE_ENV === "production" && mode !== "prisma") {
+    throw new Error(
+      "production requires CHAINMON_DATA_MODE=prisma; memory/demo mode is disabled.",
+    );
+  }
   if (mode === "prisma") {
     // Fail-closed: probe the database once; never fall back to Memory.
     try {

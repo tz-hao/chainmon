@@ -9,13 +9,13 @@ const COOKIE_NAME = "chainmon_trainer_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 interface TrainerSessionPayload {
+  walletAddress: string;
   trainerId: string;
-  wallet: string;
   expiresAt: number;
 }
 
 export class TrainerSessionError extends Error {
-  constructor(message = "A verified wallet session is required.") {
+  constructor(message = "A verified wallet login session is required.") {
     super(message);
     this.name = "TrainerSessionError";
   }
@@ -36,13 +36,13 @@ function sign(encodedPayload: string): string {
 }
 
 export function createTrainerSessionToken(
+  walletAddress: string,
   trainerId: string,
-  wallet: string,
   now = Date.now(),
 ): string {
   const payload: TrainerSessionPayload = {
+    walletAddress,
     trainerId,
-    wallet: wallet.toLowerCase(),
     expiresAt: now + SESSION_TTL_MS,
   };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -66,18 +66,18 @@ export function readTrainerSessionToken(token: string, now = Date.now()): Traine
   } catch {
     throw new TrainerSessionError("Invalid wallet session.");
   }
-  if (!payload.trainerId || !payload.wallet || !Number.isFinite(payload.expiresAt) || payload.expiresAt <= now) {
-    throw new TrainerSessionError("Wallet session expired. Verify your wallet again.");
+  if (!payload.walletAddress || !payload.trainerId || !Number.isFinite(payload.expiresAt) || payload.expiresAt <= now) {
+    throw new TrainerSessionError("Login session expired. Please sign in again.");
   }
   return payload;
 }
 
 export function setTrainerSessionCookie(
   response: NextResponse,
+  walletAddress: string,
   trainerId: string,
-  wallet: string,
 ): void {
-  response.cookies.set(COOKIE_NAME, createTrainerSessionToken(trainerId, wallet), {
+  response.cookies.set(COOKIE_NAME, createTrainerSessionToken(walletAddress, trainerId), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -86,15 +86,25 @@ export function setTrainerSessionCookie(
   });
 }
 
-/** Resolve identity from the signed cookie and the persisted wallet→trainer link. */
+export function clearTrainerSessionCookie(response: NextResponse): void {
+  response.cookies.set(COOKIE_NAME, "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+  });
+}
+
+/** Resolve identity from the signed cookie and persisted wallet→trainer link. */
 export async function resolveTrainerSession(
   repository: GameRepository,
   token: string,
 ): Promise<string> {
   const payload = readTrainerSessionToken(token);
-  const trainerId = await repository.getTrainerByWallet(payload.wallet);
+  const trainerId = await repository.getTrainerByWallet(payload.walletAddress);
   if (!trainerId || trainerId !== payload.trainerId) {
-    throw new TrainerSessionError("Wallet session no longer matches this trainer.");
+    throw new TrainerSessionError("Login session no longer matches this trainer.");
   }
   return trainerId;
 }
@@ -102,7 +112,8 @@ export async function resolveTrainerSession(
 export async function requireAuthenticatedTrainer(
   repository: GameRepository,
 ): Promise<string> {
-  const token = cookies().get(COOKIE_NAME)?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) throw new TrainerSessionError();
   return resolveTrainerSession(repository, token);
 }

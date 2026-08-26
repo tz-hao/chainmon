@@ -1,18 +1,16 @@
 import Link from "next/link";
 import { MONSTER_SPECIES } from "@chainmon/monster-data";
-import { DemoModeNote } from "@/components/DemoModeNote";
 import { EmptyState } from "@/components/EmptyState";
 import { MonsterGrid } from "@/components/MonsterGrid";
 import { PageHeader } from "@/components/PageHeader";
 import { WEB3_CONCEPTS, unlockedConcepts } from "@/components/world/KnowledgeCard";
-import { getRepository } from "@/lib/data";
+import { requirePageTrainer } from "@/lib/auth/current-trainer";
 
 export const dynamic = "force-dynamic";
 
 export default async function MonstersPage() {
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  const monsters = trainer ? await repository.listMonsters() : [];
+  const { repository, trainer } = await requirePageTrainer();
+  const monsters = await repository.listMonsters(trainer.id);
   const speciesById = Object.fromEntries(
     MONSTER_SPECIES.map((species) => [species.id, species]),
   ) as Record<number, (typeof MONSTER_SPECIES)[number]>;
@@ -29,35 +27,12 @@ export default async function MonstersPage() {
       <PageHeader
         title="Monster Collection"
         subtitle={
-          trainer
-            ? `${trainer.nickname}'s monsters — click a monster for its full profile.`
-            : "Every monster you have ever captured, with stats, DNA and NFT details."
+          `${trainer.nickname}'s monsters — click a monster for its full profile.`
         }
         badge={`${monsters.length} owned`}
       />
 
-      {!trainer ? (
-        <>
-          <EmptyState
-            icon="🎒"
-            title="No trainer yet"
-            description="Create your trainer and choose a starter monster to begin your journey."
-            action={
-              <Link
-                href="/login"
-                className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
-              >
-                Create Trainer
-              </Link>
-            }
-          />
-          {repository.kind === "memory" ? (
-            <div className="mt-6">
-              <DemoModeNote />
-            </div>
-          ) : null}
-        </>
-      ) : monsters.length === 0 ? (
+      {monsters.length === 0 ? (
         <>
           <EmptyState
             icon="🥚"
@@ -72,11 +47,6 @@ export default async function MonstersPage() {
               </Link>
             }
           />
-          {repository.kind === "memory" ? (
-            <div className="mt-6">
-              <DemoModeNote />
-            </div>
-          ) : null}
         </>
       ) : (
         <>
@@ -123,11 +93,6 @@ export default async function MonstersPage() {
             </div>
           </div>
 
-          {repository.kind === "memory" ? (
-            <div className="mt-8">
-              <DemoModeNote />
-            </div>
-          ) : null}
         </>
       )}
     </div>

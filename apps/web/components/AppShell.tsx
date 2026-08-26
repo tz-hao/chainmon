@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { WalletButton } from "./WalletButton";
+import { AccountHeader } from "./AccountHeader";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/explore", label: "Explore" },
+  { href: "/world/select", label: "Worlds" },
   { href: "/battle", label: "Battle" },
   { href: "/monsters", label: "Monsters" },
   { href: "/team", label: "Team" },
@@ -49,22 +49,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-          <div className="flex items-center gap-3">
-            <WalletButton />
-            <Link
-              href="/login"
-              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
-            >
-              Sign In
-            </Link>
-          </div>
+          <AccountHeader />
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
 
       <footer className="border-t border-slate-800 py-6 text-center text-xs text-slate-500">
-        ChainMon MVP · Phase 1 · Next.js + TypeScript + Tailwind + Prisma
+        ChainMon · Public Playtest · Personal Trainer progress
       </footer>
     </div>
   );

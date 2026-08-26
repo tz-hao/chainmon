@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import type { BattleState } from "@chainmon/game-engine";
-import { getRepository } from "@/lib/data";
+import { getCurrentTrainer } from "@/lib/auth/current-trainer";
 import {
   BattleError,
   createBattle,
@@ -23,11 +23,7 @@ export async function saveTeamAction(
     String(formData.get("slot3") ?? ""),
   ];
 
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  if (!trainer) {
-    return { ok: false, error: "Create a trainer first." };
-  }
+  const { repository, trainer } = await getCurrentTrainer();
 
   try {
     await saveBattleTeam(repository, trainer.id, monsterIds);
@@ -50,11 +46,7 @@ export interface StartBattleActionResult {
 }
 
 export async function startBattleAction(): Promise<StartBattleActionResult> {
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  if (!trainer) {
-    return { ok: false, error: "Create a trainer first." };
-  }
+  const { repository, trainer } = await getCurrentTrainer();
 
   let battle: BattleState;
   try {

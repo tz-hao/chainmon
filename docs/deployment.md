@@ -13,6 +13,10 @@ health checks and smoke tests.
 Production requires a real PostgreSQL (≥ 14, tested on 16). Use a managed
 database (RDS / Cloud SQL / Neon / Supabase) or a self-hosted instance.
 
+For a public playtest, create a **new dedicated database**. Do not point these
+steps at a previous development database and do not use `prisma db push` for
+the release schema.
+
 - Create a database and user, e.g.:
   ```sql
   CREATE DATABASE chainmon;
@@ -35,17 +39,17 @@ database (RDS / Cloud SQL / Neon / Supabase) or a self-hosted instance.
 | --- | --- | --- |
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
 | `CHAINMON_DATA_MODE` | ✅ | `prisma` in production (fail-closed; `memory` is dev-only) |
+| `CHAINMON_SESSION_SECRET` | ✅ | 32+ random server-only bytes used to HMAC the HttpOnly wallet session |
+| `CHAINMON_APP_ORIGIN` | Self-hosted only | Canonical `https://` origin for SIWE; Vercel derives a deployment origin from `VERCEL_URL` |
 | `CHAINMON_CHAIN_ID` | ✅ | `10143` for Monad Testnet |
 | `CHAINMON_RPC_URL` | ✅ | RPC for the target chain |
 | `CHAINMON_MONSTER_NFT_ADDRESS` | ✅ | Deployed `MonsterNFT` address |
 | `CHAINMON_MONSTER_MARKETPLACE_ADDRESS` | ✅ | Deployed `MonsterMarketplace` address |
 | `CHAINMON_MINTER_PRIVATE_KEY` | ✅ | **Server-only.** Backend operator key (MINTER + EVOLVER). Use Vercel Env / Secret Manager / KMS. Never commit, never log. |
 | `NEXT_PUBLIC_CHAINMON_CHAIN_ID` | ✅ | `10143` |
-| `NEXT_PUBLIC_CHAINMON_RPC_URL` | ✅ | Public RPC for wallet clients |
 | `NEXT_PUBLIC_MONSTER_NFT_ADDRESS` | ✅ | Client-side mirror of the NFT contract |
 | `NEXT_PUBLIC_MONSTER_MARKETPLACE_ADDRESS` | ✅ | Client-side mirror of the marketplace |
 | `NEXT_PUBLIC_BLOCK_EXPLORER_URL` | ✅ | `https://testnet.monadscan.com` |
-| `NEXT_PUBLIC_APP_URL` | ✅ | Public app URL (used by the metadata API) |
 
 Contracts deployment (in `contracts/.env`, gitignored):
 
@@ -72,12 +76,12 @@ Both verify the RPC reports chainId **10143** — deployment stops if not.
 
 ```bash
 npm run db:generate   # generate the Prisma client
-npm run db:push       # sync schema with the database (or use prisma migrate)
-npm run db:seed       # idempotent seed: 28 species, 48 skills, items
-npm run db:seed       # run twice — the second run must succeed
+npx prisma migrate deploy  # apply committed migrations to the new database
+npm run db:seed            # idempotent canonical seed (species, skills, items)
 ```
 
-Seed rows are upserted by unique keys — re-running never duplicates data.
+Seed rows are upserted by unique keys — re-running never duplicates data. No
+trainer, monster, test account, demo account or fallback data is seeded.
 
 ## 4. Contract Compilation (Monad)
 
@@ -194,12 +198,11 @@ CHAINMON_RPC_URL=https://testnet-rpc.monad.xyz
 CHAINMON_MONSTER_NFT_ADDRESS=<from deployments/monadTestnet.json>
 CHAINMON_MONSTER_MARKETPLACE_ADDRESS=<from deployments/monadTestnet.json>
 CHAINMON_MINTER_PRIVATE_KEY=<operator key with MINTER+EVOLVER>
+CHAINMON_SESSION_SECRET=<32+ random server-only bytes>
 NEXT_PUBLIC_CHAINMON_CHAIN_ID=10143
-NEXT_PUBLIC_CHAINMON_RPC_URL=https://testnet-rpc.monad.xyz
 NEXT_PUBLIC_MONSTER_NFT_ADDRESS=<same NFT address>
 NEXT_PUBLIC_MONSTER_MARKETPLACE_ADDRESS=<same marketplace address>
 NEXT_PUBLIC_BLOCK_EXPLORER_URL=https://testnet.monadscan.com
-NEXT_PUBLIC_APP_URL=<app url>
 ```
 
 The marketplace UI derives the currency label from the chain config — Monad
@@ -208,7 +211,7 @@ payments).
 
 ## 9. App Deployment
 
-Next.js 14 App Router. Server runtime must support Prisma and the viem
+Next.js 15 App Router. Server runtime must support Prisma and the viem
 backend signer (Node runtime with egress to the RPC).
 
 ```bash
@@ -254,7 +257,8 @@ Ownership sync then moves the monster in the DB to the buyer's trainer.
 - **Recovery** — minted/evolution-submitted/listings recover via receipt
   reconciliation + `reconcileListing`; `npm run audit:state` is read-only.
 - **Rate limiting** — MVP in-process limiter recommended for
-  `/api/wallet/*`, `/api/nft/claim`, `/api/nft/refresh` before public launch.
+  `/api/auth/nonce`, `/api/auth/verify`, `/api/nft/claim`, `/api/nft/refresh`
+  before public launch.
 - **RPC failures** — Monad public RPC may rate-limit; UI shows
   "temporarily unavailable" (no 500); submitted txs stay SUBMITTED/PENDING
   until a manual Refresh reconciles them.

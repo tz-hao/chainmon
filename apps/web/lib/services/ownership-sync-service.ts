@@ -27,7 +27,7 @@ export async function syncMonsterOwnership(
   gateway: ChainGateway,
   monsterId: string,
 ): Promise<OwnershipSyncResult> {
-  const monster = await repository.getMonster(monsterId);
+  const monster = await repository.getMonsterPublic(monsterId);
   if (!monster) throw new OwnershipSyncError("Monster not found.");
   if (monster.mintStatus !== "MINT_CONFIRMED" || !monster.tokenId) {
     // Off-chain monsters keep the game DB ownership.
@@ -79,7 +79,7 @@ export async function assertGameplayOwnership(
   trainerId: string,
   monsterId: string,
 ): Promise<void> {
-  const monster = await repository.getMonster(monsterId);
+  const monster = await repository.getMonster(monsterId, trainerId);
   if (!monster) throw new OwnershipSyncError("Monster not found.");
   if (monster.mintStatus !== "MINT_CONFIRMED" || !monster.tokenId) return;
 

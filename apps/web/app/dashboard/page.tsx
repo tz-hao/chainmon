@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { BlockchainStatus } from "@/components/BlockchainStatus";
-import { DemoModeNote } from "@/components/DemoModeNote";
 import { PageHeader } from "@/components/PageHeader";
 import { PhaseNote } from "@/components/PhaseNote";
 import { StatCard } from "@/components/StatCard";
-import { getRepository } from "@/lib/data";
+import { requirePageTrainer } from "@/lib/auth/current-trainer";
 
 const ENTRIES = [
   {
-    href: "/explore",
+    href: "/world/select",
     icon: "🗺️",
     title: "Explore",
     text: "Head into the wild and encounter monsters.",
@@ -40,18 +39,15 @@ const ENTRIES = [
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  const monsters = trainer ? await repository.listMonsters() : [];
+  const { repository, trainer } = await requirePageTrainer();
+  const monsters = await repository.listMonsters(trainer.id);
 
   return (
     <div className="animate-fade-in-up">
       <PageHeader
         title="Dashboard"
         subtitle={
-          trainer
-            ? `Trainer ${trainer.nickname} — live data.`
-            : "Your trainer overview. Create a trainer to see live data."
+          `Trainer ${trainer.nickname} — your personal progress.`
         }
         badge="Phase 2"
       />
@@ -60,28 +56,28 @@ export default async function DashboardPage() {
       <section className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatCard
           label="Trainer"
-          value={trainer?.nickname ?? "—"}
-          hint={trainer ? "Demo account" : "Create one via /login"}
+          value={trainer.nickname}
+          hint="Wallet account"
         />
         <StatCard
           label="Wallet"
-          value="Not connected"
-          hint="Privy + wagmi in Phase 7"
+          value="Connected"
+          hint="Your ChainMon identity"
         />
         <StatCard
           label="Gold"
-          value={trainer?.gold ?? 0}
+          value={trainer.gold}
           hint="Earned from battles"
         />
         <StatCard label="Monsters" value={monsters.length} hint="Captured & owned" />
         <StatCard
           label="Wins"
-          value={trainer?.wins ?? 0}
+          value={trainer.wins}
           hint="Battle victories"
         />
         <StatCard
           label="Battles"
-          value={trainer?.battleCount ?? 0}
+          value={trainer.battleCount}
           hint="Total 3v3 battles"
         />
       </section>
@@ -94,14 +90,13 @@ export default async function DashboardPage() {
 
         {/* Primary CTA: the Pixel World is the main gameplay entry */}
         <Link
-          href="/world"
+          href="/world/select"
           className="mb-4 flex items-center justify-between rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-6 transition-colors hover:bg-emerald-500/20"
         >
           <div>
             <h3 className="text-xl font-bold text-emerald-200">ENTER WORLD</h3>
             <p className="mt-1 text-sm text-slate-300">
-              Walk ChainMon Valley, spot wild monsters and capture them with
-              your capsules.
+              选择森林、湖泊、火山或发电厂，进入真正的像素世界冒险。
             </p>
           </div>
           <span className="text-3xl">🌍</span>
@@ -139,18 +134,12 @@ export default async function DashboardPage() {
         </div>
       </section>
 
-      {repository.kind === "memory" ? (
-        <div className="mt-10">
-          <DemoModeNote />
-        </div>
-      ) : (
-        <div className="mt-10">
-          <PhaseNote
-            phase="Phase 5"
-            text="Trainer and monster counts are now live. Gold / wins / battles stay at 0 until the battle system lands in Phase 4."
-          />
-        </div>
-      )}
+      <div className="mt-10">
+        <PhaseNote
+          phase="Public Playtest"
+          text="所有进度均属于当前钱包对应的个人 Trainer。"
+        />
+      </div>
     </div>
   );
 }

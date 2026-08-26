@@ -6,8 +6,10 @@ import { exploreRegion } from "../../services/explore-service";
 import {
   BLOCKED_TILES,
   buildChainMonValley,
+  buildWorldMap,
   validateMap,
 } from "../map-data";
+import { WORLD_MAPS } from "../world-maps";
 import { WORLD_ZONES, zoneAt, zoneNameAt } from "../zones";
 import {
   SPAWN_TABLES,
@@ -26,6 +28,30 @@ import {
   startWorldEncounter,
   validateWorldPosition,
 } from "../../services/world-service";
+
+function reachableWalkableTiles() {
+  const map = buildChainMonValley();
+  const start = { x: 30, y: 24 };
+  const visited = new Set<string>([`${start.x},${start.y}`]);
+  const queue = [start];
+  const directions = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const [dx, dy] of directions) {
+      const x = current.x + dx;
+      const y = current.y + dy;
+      const key = `${x},${y}`;
+      if (visited.has(key) || x < 0 || y < 0 || x >= map.cols || y >= map.rows) continue;
+      const code = map.tiles[y * map.cols + x]!;
+      if (BLOCKED_TILES.has(code)) continue;
+      visited.add(key);
+      queue.push({ x, y });
+    }
+  }
+
+  return { map, visited };
+}
 
 describe("ChainMon Valley map", () => {
   it("has valid dimensions (64×48) and no zone overflow", () => {
@@ -54,6 +80,34 @@ describe("ChainMon Valley map", () => {
     }
   });
 
+  it("lets a trainer leave camp and reach every explorable zone and pickup", () => {
+    const { map, visited } = reachableWalkableTiles();
+    const key = (x: number, y: number) => `${x},${y}`;
+
+    for (const zone of WORLD_ZONES.filter((zone) => zone.id !== "camp")) {
+      const hasReachableTile = Array.from({ length: zone.width * zone.height }, (_, index) => {
+        const x = zone.x + (index % zone.width);
+        const y = zone.y + Math.floor(index / zone.width);
+        return visited.has(key(x, y));
+      }).some(Boolean);
+      expect(hasReachableTile, `${zone.name} should be reachable from camp`).toBe(true);
+    }
+
+    for (const pickup of map.pickups) {
+      expect(visited.has(key(pickup.x, pickup.y)), `${pickup.pickupKey} should be reachable`).toBe(true);
+    }
+
+    for (const npc of [map.shopNpc, map.guideNpc]) {
+      const hasReachableAdjacentTile = [
+        key(npc.x - 1, npc.y),
+        key(npc.x + 1, npc.y),
+        key(npc.x, npc.y - 1),
+        key(npc.x, npc.y + 1),
+      ].some((tile) => visited.has(tile));
+      expect(hasReachableAdjacentTile).toBe(true);
+    }
+  });
+
   it("places 5-8 pickups inside their zones", () => {
     const map = buildChainMonValley();
     expect(map.pickups.length).toBeGreaterThanOrEqual(5);
@@ -75,6 +129,43 @@ describe("ChainMon Valley map", () => {
     expect(BLOCKED_TILES.has("t")).toBe(true);
     expect(BLOCKED_TILES.has("v")).toBe(true);
     expect(BLOCKED_TILES.has(".")).toBe(false);
+  });
+});
+
+describe("four formal pixel worlds", () => {
+  it("has four collision-safe maps with a reachable entry, NPCs and pickups", () => {
+    expect(WORLD_MAPS).toHaveLength(4);
+    for (const definition of WORLD_MAPS) {
+      const map = buildWorldMap(definition.id);
+      expect(map.name).toBe(definition.name);
+      expect(BLOCKED_TILES.has(map.tiles[map.spawnPoint.y * map.cols + map.spawnPoint.x]!)).toBe(false);
+      expect(map.pickups.length).toBeGreaterThan(0);
+
+      const visited = new Set<string>([`${map.spawnPoint.x},${map.spawnPoint.y}`]);
+      const queue = [map.spawnPoint];
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const x = current.x + dx;
+          const y = current.y + dy;
+          const key = `${x},${y}`;
+          if (visited.has(key) || x < 0 || y < 0 || x >= map.cols || y >= map.rows) continue;
+          if (BLOCKED_TILES.has(map.tiles[y * map.cols + x]!)) continue;
+          visited.add(key);
+          queue.push({ x, y });
+        }
+      }
+
+      for (const pickup of map.pickups) {
+        expect(visited.has(`${pickup.x},${pickup.y}`), `${definition.id} pickup ${pickup.pickupKey}`).toBe(true);
+      }
+      for (const npc of [map.shopNpc, map.guideNpc]) {
+        const adjacentReachable = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) =>
+          visited.has(`${npc.x + dx},${npc.y + dy}`),
+        );
+        expect(adjacentReachable, `${definition.id} NPC access`).toBe(true);
+      }
+    }
   });
 });
 
@@ -224,6 +315,7 @@ describe("world encounter response", () => {
     await memoryRepository.saveWorldSpawns([
       {
         id: "other-spawn",
+        worldMap: "ember-volcano",
         speciesId: 18,
         zoneId: "volcano",
         x: 46,
@@ -234,7 +326,7 @@ describe("world encounter response", () => {
       },
     ]);
     await memoryRepository.saveTrainerWorldPosition(trainer.id, {
-      worldMap: "chainmon-valley",
+      worldMap: "ember-volcano",
       worldX: 46,
       worldY: 33,
     });

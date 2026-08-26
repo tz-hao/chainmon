@@ -12,18 +12,21 @@ export const WORLD_HEIGHT = WORLD_ROWS * WORLD_TILE_SIZE; // 768
 
 /** Phaser render config (section 6 of the spec). */
 export const WORLD_RENDER = {
-  width: 960,
-  height: 540,
+  // A 48×27 tile viewport gives the camera room to travel across the 64×48
+  // valley. The old 60×34 viewport showed nearly the entire map at once,
+  // which made the camp feel like the whole playable area.
+  width: 768,
+  height: 432,
   pixelArt: true,
   roundPixels: true,
   scaleMode: "FIT" as const,
   scaleCenter: "CENTER_BOTH" as const,
 };
 
-/** Player sprite: 32×32 source, rendered at 3x (96px on screen). */
+/** Player sprite: 32×32 source, rendered at native scale (two map tiles tall). */
 export const PLAYER_SOURCE_SIZE = 32;
-export const PLAYER_RENDER_SCALE = 3;
-export const PLAYER_SPEED = 170; // px per second at source scale
+export const PLAYER_RENDER_SCALE = 1;
+export const PLAYER_SPEED = 180; // px per second at source scale
 
 /** Monster overworld: 32×32 source, rendered at 2.5x (80px). */
 export const MONSTER_OVERWORLD_SCALE = 2.5;

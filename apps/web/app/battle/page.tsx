@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { MONSTER_SPECIES } from "@chainmon/monster-data";
-import { DemoModeNote } from "@/components/DemoModeNote";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StartBattleButton } from "@/components/StartBattleButton";
-import { getRepository } from "@/lib/data";
+import { requirePageTrainer } from "@/lib/auth/current-trainer";
 import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
 
 export const dynamic = "force-dynamic";
@@ -16,45 +15,12 @@ function resultLabel(winner: string | undefined): string {
 }
 
 export default async function BattlePage() {
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  const team = trainer ? await repository.getTeam(trainer.id) : null;
-  const history = trainer
-    ? await repository.getTrainerBattles(trainer.id, 8)
-    : [];
+  const { repository, trainer } = await requirePageTrainer();
+  const team = await repository.getTeam(trainer.id);
+  const history = await repository.getTrainerBattles(trainer.id, 8);
   const speciesImages = Object.fromEntries(
     MONSTER_SPECIES.map((species) => [species.id, getMonsterVisualPath(species.id, "portrait")]),
   ) as Record<number, string>;
-
-  if (!trainer) {
-    return (
-      <div className="animate-fade-in-up">
-        <PageHeader
-          title="Battle"
-          subtitle="3v3 turn-based battles against AI trainers."
-          badge="Phase 4"
-        />
-        <EmptyState
-          icon="🎒"
-          title="No trainer yet"
-          description="Create your trainer and build a team to start battling."
-          action={
-            <Link
-              href="/login"
-              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
-            >
-              Create Trainer
-            </Link>
-          }
-        />
-        {repository.kind === "memory" ? (
-          <div className="mt-6">
-            <DemoModeNote />
-          </div>
-        ) : null}
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in-up">
@@ -170,11 +136,6 @@ export default async function BattlePage() {
         )}
       </section>
 
-      {repository.kind === "memory" ? (
-        <div className="mt-8">
-          <DemoModeNote />
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -3,7 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { parseEther } from "viem";
-import { useAccount, useChainId, usePublicClient, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  useChainId,
+  usePublicClient,
+  useSwitchChain,
+  useWriteContract,
+} from "wagmi";
 import monsterNftAbi from "../../../contracts/abis/MonsterNFT.json";
 import monsterMarketplaceAbi from "../../../contracts/abis/MonsterMarketplace.json";
 import type { Monster } from "@chainmon/shared";
@@ -28,6 +34,7 @@ export function SellPanel({ monster, listing }: SellPanelProps) {
   const chainId = useChainId();
   const publicClient = usePublicClient();
   const { address, isConnected } = useAccount();
+  const { switchChain, isPending: isSwitchingNetwork } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
 
   const [priceEth, setPriceEth] = useState("");
@@ -37,7 +44,7 @@ export function SellPanel({ monster, listing }: SellPanelProps) {
   const [info, setInfo] = useState<string | null>(null);
 
   const targetChainId = Number(
-    process.env.NEXT_PUBLIC_CHAINMON_CHAIN_ID ?? 31337,
+    process.env.NEXT_PUBLIC_CHAINMON_CHAIN_ID ?? 10143,
   );
   const wrongNetwork = isConnected && chainId !== targetChainId;
   const tokenId = BigInt(monster.tokenId ?? "0");
@@ -113,7 +120,6 @@ export function SellPanel({ monster, listing }: SellPanelProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          trainerId: monster.owner,
           monsterId: monster.id,
           txHash: tx,
           priceWei: priceWei.toString(),
@@ -150,7 +156,6 @@ export function SellPanel({ monster, listing }: SellPanelProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          trainerId: monster.owner,
           monsterId: monster.id,
           txHash: tx,
         }),
@@ -188,9 +193,17 @@ export function SellPanel({ monster, listing }: SellPanelProps) {
       </h2>
 
       {wrongNetwork ? (
-        <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-          Wrong network — switch to chain {targetChainId} to trade.
-        </p>
+        <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          <p>上架、取消和购买均是链上交易，请先切换到 Monad Testnet。</p>
+          <button
+            type="button"
+            disabled={isSwitchingNetwork}
+            onClick={() => switchChain({ chainId: targetChainId })}
+            className="mt-2 rounded-md border border-red-400/40 px-2.5 py-1 font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+          >
+            {isSwitchingNetwork ? "切换中..." : "切换到 Monad Testnet"}
+          </button>
+        </div>
       ) : null}
 
       {active ? (

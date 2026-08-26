@@ -39,19 +39,30 @@ enum EncounterStatus {
 // ---------- Accounts ----------
 
 model User {
-  id            String    @id @default(cuid())
-  email         String?   @unique
-  walletAddress String?   @unique // canonical lowercase (checksum-validated before bind)
-  privyDid      String?   @unique
-  // Phase 7 wallet verification (single-use nonce challenge)
-  walletNonce          String?
-  walletNonceExpiresAt DateTime?
-  walletVerifiedAt     DateTime?
-  trainer       Trainer?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String   @id @default(cuid())
+  /// EIP-55 validated and persisted in canonical lowercase. No key material is stored.
+  walletAddress     String   @unique
+  walletVerifiedAt  DateTime?
+  trainer           Trainer?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   @@map("users")
+}
+
+/// Short-lived, server-created SIWE challenges. A challenge is independent of
+/// User so a first-time wallet never creates an account before it signs.
+model WalletLoginChallenge {
+  id        String    @id @default(cuid())
+  address   String
+  nonce     String    @unique
+  message   String
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([address, expiresAt])
+  @@map("wallet_login_challenges")
 }
 
 model Trainer {
@@ -67,12 +78,13 @@ model Trainer {
   updatedAt   DateTime @updatedAt
 
   // Pixel World (map name + tile position; saved throttled, not per-frame)
-  worldMap String  @default("chainmon-valley")
+  worldMap String  @default("whispering-forest")
   worldX   Int     @default(30)
   worldY   Int     @default(24)
   // Ball economy
   lastDailySupplyAt  DateTime?
   starterSupplyClaimed Boolean @default(false)
+  starterMonsterClaimed Boolean @default(false)
 
   monsters      Monster[]
   inventory     Inventory[]
@@ -90,6 +102,7 @@ model Trainer {
 // Reconciled lazily on /api/world/state (no background worker).
 model WorldSpawn {
   id        String   @id @default(cuid())
+  worldMap  String   @default("whispering-forest")
   speciesId Int
   zoneId    String
   x         Int

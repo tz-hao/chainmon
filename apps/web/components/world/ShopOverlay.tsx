@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 interface ShopOverlayProps {
-  trainerId: string;
   gold: number;
   onClose: () => void;
 }
@@ -18,7 +17,7 @@ const SHOP_ITEMS = [
  * Ball Merchant — server-authoritative purchase (gold check + atomic
  * deduction + inventory grant happen in one DB transaction).
  */
-export function ShopOverlay({ trainerId, gold, onClose }: ShopOverlayProps) {
+export function ShopOverlay({ gold, onClose }: ShopOverlayProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -32,7 +31,7 @@ export function ShopOverlay({ trainerId, gold, onClose }: ShopOverlayProps) {
       const res = await fetch("/api/world/shop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trainerId, itemSlug: slug, quantity }),
+        body: JSON.stringify({ itemSlug: slug, quantity }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {

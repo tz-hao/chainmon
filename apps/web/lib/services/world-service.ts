@@ -24,7 +24,8 @@ import {
 import { pickSpawnEntry, spawnLevel } from "@/lib/world/spawn-tables";
 import type { ZoneId } from "@/lib/world/world-types";
 import { WORLD_ZONES, zoneAt } from "@/lib/world/zones";
-import { buildChainMonValley, BLOCKED_TILES } from "@/lib/world/map-data";
+import { buildWorldMap, BLOCKED_TILES } from "@/lib/world/map-data";
+import { getWorldMapDefinition, normalizeWorldMapId } from "@/lib/world/world-maps";
 
 export class WorldError extends Error {
   constructor(message: string) {
@@ -54,28 +55,22 @@ function serverRandom(): () => number {
  */
 export async function reconcileWorldSpawns(
   repository: GameRepository,
+  worldMap: string,
 ): Promise<WorldSpawnRecord[]> {
+  const mapId = normalizeWorldMapId(worldMap);
+  const mapDefinition = getWorldMapDefinition(mapId);
   const now = new Date();
   await repository.deleteExpiredWorldSpawns(now);
-  const existing = await repository.getWorldSpawns();
+  const existing = await repository.getWorldSpawns(mapId);
   const next = serverRandom();
-  const map = buildChainMonValley();
+  const map = buildWorldMap(mapId);
 
   const toCreate: WorldSpawnRecord[] = [];
   const need = Math.max(0, WORLD_MAX_SPAWNS - existing.length);
   // also top-up if below the minimum
   const topUp = Math.max(need, WORLD_MIN_SPAWNS - existing.length);
 
-  // We create spawns in random zones; the vault is gated to be rare.
-  const zoneCandidates: ZoneId[] = [
-    "forest",
-    "lake",
-    "volcano",
-    "power-zone",
-    "grove",
-  ];
-  // VaultTurtle zone appears rarely (cold vault hidden area, ~1-2%).
-  if (next() < 0.12) zoneCandidates.push("vault");
+  const zoneCandidates = [...mapDefinition.spawnZones];
 
   for (let i = 0; i < topUp; i++) {
     const zoneId = zoneCandidates[Math.floor(next() * zoneCandidates.length)]!;
@@ -97,6 +92,7 @@ export async function reconcileWorldSpawns(
     const expiresAt = new Date(now.getTime() + WORLD_SPAWN_TTL_MS);
     toCreate.push({
       id: `spawn-${randomId()}`,
+      worldMap: mapId,
       speciesId: entry.speciesId,
       zoneId,
       x,
@@ -108,7 +104,7 @@ export async function reconcileWorldSpawns(
   }
 
   await repository.saveWorldSpawns(toCreate, WORLD_MAX_SPAWNS);
-  return repository.getWorldSpawns();
+  return repository.getWorldSpawns(mapId);
 }
 
 /** Keep server-authoritative interactions close to the saved player tile. */
@@ -145,7 +141,8 @@ export async function startWorldEncounter(
   repository: GameRepository,
   params: StartWorldEncounterParams,
 ): Promise<StartWorldEncounterResult> {
-  const spawns = await repository.getWorldSpawns();
+  const position = await repository.getTrainerWorldPosition(params.trainerId);
+  const spawns = await repository.getWorldSpawns(position?.worldMap);
   const spawn = spawns.find((s) => s.id === params.spawnId);
   if (!spawn) {
     throw new WorldError("That wild monster is gone.");
@@ -155,7 +152,6 @@ export async function startWorldEncounter(
     throw new WorldError("That wild monster has left.");
   }
 
-  const position = await repository.getTrainerWorldPosition(params.trainerId);
   if (!position || !isWithinWorldInteractionDistance(position, spawn)) {
     throw new WorldError("Move closer to that wild ChainMon.");
   }
@@ -247,10 +243,11 @@ export interface PickupReward {
 export const PICKUP_REWARDS: Record<string, PickupReward> = {
   "forest-spark-1": { itemSlug: "basic-ball", quantity: 2 },
   "lake-spark-1": { itemSlug: "great-ball", quantity: 1 },
-  "volcano-spark-1": { gold: 60, quantity: 1 },
-  "power-spark-1": { itemSlug: "basic-ball", quantity: 3 },
-  "grove-spark-1": { itemSlug: "great-ball", quantity: 1 },
   "vault-chest-1": { itemSlug: "ultra-ball", quantity: 1 },
+  "volcano-spark-1": { gold: 60, quantity: 1 },
+  "volcano-cave-1": { itemSlug: "great-ball", quantity: 1 },
+  "power-spark-1": { itemSlug: "basic-ball", quantity: 3 },
+  "power-core-1": { itemSlug: "ultra-ball", quantity: 1 },
 };
 
 export function getPickupReward(pickupKey: string) {

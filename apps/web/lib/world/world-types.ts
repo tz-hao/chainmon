@@ -37,6 +37,7 @@ export interface WorldStateResponse {
     id: string;
     nickname: string;
     gold: number;
+    worldMap: string;
     worldX: number;
     worldY: number;
     zoneId: string | null;

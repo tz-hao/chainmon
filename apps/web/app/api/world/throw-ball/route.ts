@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/data";
+import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/trainer-session";
 import { throwBall, CaptureError } from "@/lib/services/capture-service";
 
 export const dynamic = "force-dynamic";
@@ -28,12 +29,9 @@ export async function POST(request: Request) {
 
   try {
     const repository = await getRepository();
-    const trainer = await repository.getDemoTrainer();
-    if (!trainer) {
-      return NextResponse.json({ error: "Create a trainer first." }, { status: 400 });
-    }
+    const trainerId = await requireAuthenticatedTrainer(repository);
     const outcome = await throwBall(repository, {
-      trainerId: trainer.id,
+      trainerId,
       encounterId: body.encounterId,
       ballSlug: body.ballSlug,
     });
@@ -49,6 +47,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof CaptureError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof TrainerSessionError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
     }
     return NextResponse.json(
       { error: "Capture temporarily unavailable." },

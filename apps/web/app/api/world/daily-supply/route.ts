@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/data";
+import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/trainer-session";
 import { DAILY_SUPPLY_ITEMS } from "@/lib/services/world-service";
 
 export const dynamic = "force-dynamic";
@@ -12,13 +13,10 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   try {
     const repository = await getRepository();
-    const trainer = await repository.getDemoTrainer();
-    if (!trainer) {
-      return NextResponse.json({ error: "Create a trainer first." }, { status: 400 });
-    }
+    const trainerId = await requireAuthenticatedTrainer(repository);
 
     const claim = await repository.claimDailySupplyBundle(
-      trainer.id,
+      trainerId,
       new Date(),
       DAILY_SUPPLY_ITEMS,
     );
@@ -26,14 +24,17 @@ export async function POST() {
       return NextResponse.json({ ok: false, error: claim.error }, { status: 400 });
     }
 
-    const inventory = await repository.getInventory(trainer.id);
+    const inventory = await repository.getInventory(trainerId);
     return NextResponse.json({
       ok: true,
       items: DAILY_SUPPLY_ITEMS,
       inventory: inventory.map((i) => ({ slug: i.slug, quantity: i.quantity })),
       nextAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof TrainerSessionError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "World temporarily unavailable." },
       { status: 503 },

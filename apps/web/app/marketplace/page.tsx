@@ -1,14 +1,12 @@
-import { DemoModeNote } from "@/components/DemoModeNote";
 import { MarketplacePage, type ListingView } from "@/components/MarketplacePage";
 import { PageHeader } from "@/components/PageHeader";
-import { getRepository } from "@/lib/data";
+import { requirePageTrainer } from "@/lib/auth/current-trainer";
 import { NATIVE_CURRENCY_SYMBOL } from "@/lib/web3/chain";
 
 export const dynamic = "force-dynamic";
 
 export default async function MarketplaceRoute() {
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
+  const { repository } = await requirePageTrainer();
 
   let initialListings: ListingView[] = [];
   try {
@@ -49,15 +47,7 @@ export default async function MarketplaceRoute() {
         subtitle={`Trade monster NFTs for fixed ${NATIVE_CURRENCY_SYMBOL}. Non-custodial, 0% platform fee.`}
         badge="Phase 8"
       />
-      <MarketplacePage
-        trainerId={trainer?.id ?? null}
-        initialListings={initialListings}
-      />
-      {repository.kind === "memory" ? (
-        <div className="mt-8">
-          <DemoModeNote />
-        </div>
-      ) : null}
+      <MarketplacePage initialListings={initialListings} />
     </div>
   );
 }

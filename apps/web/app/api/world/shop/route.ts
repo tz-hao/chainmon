@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/data";
+import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/trainer-session";
 
 export const dynamic = "force-dynamic";
 
@@ -40,12 +41,9 @@ export async function POST(request: Request) {
 
   try {
     const repository = await getRepository();
-    const trainer = await repository.getDemoTrainer();
-    if (!trainer) {
-      return NextResponse.json({ error: "Create a trainer first." }, { status: 400 });
-    }
+    const trainerId = await requireAuthenticatedTrainer(repository);
     const result = await repository.purchaseShopItem(
-      trainer.id,
+      trainerId,
       itemSlug,
       quantity,
       unitPrice,
@@ -53,14 +51,17 @@ export async function POST(request: Request) {
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: 400 });
     }
-    const inventory = await repository.getInventory(trainer.id);
+    const inventory = await repository.getInventory(trainerId);
     return NextResponse.json({
       ok: true,
       goldAfter: result.goldAfter,
       itemName: SHOP_NAMES[itemSlug] ?? itemSlug,
       inventory: inventory.map((i) => ({ slug: i.slug, quantity: i.quantity })),
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof TrainerSessionError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "Shop temporarily unavailable." },
       { status: 503 },

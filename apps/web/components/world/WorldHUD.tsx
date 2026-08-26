@@ -6,11 +6,13 @@ interface WorldHUDProps {
   worldState: WorldStateResponse;
   zoneName: string;
   onClaimDaily: () => void;
+  onOpenGuide: () => void;
+  onOpenMap: () => void;
   dailyBusy: boolean;
 }
 
 /** Top HUD: trainer, zone, gold, ball counts + network badge. */
-export function WorldHUD({ worldState, zoneName, onClaimDaily, dailyBusy }: WorldHUDProps) {
+export function WorldHUD({ worldState, zoneName, onClaimDaily, onOpenGuide, onOpenMap, dailyBusy }: WorldHUDProps) {
   const ball = (slug: string) =>
     worldState.inventory.find((i) => i.slug === slug)?.quantity ?? 0;
 
@@ -27,9 +29,23 @@ export function WorldHUD({ worldState, zoneName, onClaimDaily, dailyBusy }: Worl
         </div>
         <button
           type="button"
+          onClick={onOpenMap}
+          className="pointer-events-auto mt-2 w-full rounded border border-sky-300/70 bg-sky-500/20 px-2 py-1.5 text-left text-[11px] font-bold text-sky-100 hover:bg-sky-500/30"
+        >
+          🗺 地图 / World Select
+        </button>
+        <button
+          type="button"
+          onClick={onOpenGuide}
+          className="pointer-events-auto mt-2 w-full rounded border border-emerald-300/70 bg-emerald-500/20 px-2 py-1.5 text-left text-[11px] font-bold text-emerald-100 hover:bg-emerald-500/30"
+        >
+          ✦ 新手指南 / Guide
+        </button>
+        <button
+          type="button"
           disabled={!worldState.dailySupply.ready || dailyBusy}
           onClick={onClaimDaily}
-          className="pointer-events-auto mt-2 rounded border border-amber-400/50 bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/25 disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
+          className="pointer-events-auto mt-2 w-full rounded border border-amber-400/50 bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-200 hover:bg-amber-500/25 disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
         >
           {dailyBusy ? "Claiming..." : worldState.dailySupply.ready ? "Daily Supply: Claim Basic ×5 · Great ×1" : "Daily Supply claimed"}
         </button>

@@ -1,7 +1,7 @@
 "use server";
 
 import type { Monster } from "@chainmon/shared";
-import { getRepository } from "@/lib/data";
+import { getCurrentTrainer } from "@/lib/auth/current-trainer";
 import {
   EvolutionError,
   evolveMonster,
@@ -26,11 +26,7 @@ export async function evolveMonsterAction(
 ): Promise<EvolveActionResult> {
   const monsterId = String(formData.get("monsterId") ?? "");
 
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  if (!trainer) {
-    return { ok: false, error: "Create a trainer first." };
-  }
+  const { repository, trainer } = await getCurrentTrainer();
 
   try {
     const result = await evolveMonster(repository, trainer.id, monsterId);

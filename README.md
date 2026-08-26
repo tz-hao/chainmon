@@ -81,7 +81,7 @@ client-controlled. Marketplace transactions are signed by user wallets.
 
 | Path | What |
 | --- | --- |
-| `apps/web` | Next.js 14 web app (App Router, TypeScript strict, Tailwind) |
+| `apps/web` | Next.js 15 web app (App Router, TypeScript strict, Tailwind) |
 | `packages/game-engine` | Pure game logic (battle / capture / damage / exp / evolution) |
 | `packages/monster-data` | Monster species catalogue (28 species, 48 skills including 8 Web3 / 32 Knowledge skills, regions) |
 | `packages/shared` | Shared domain types & constants |

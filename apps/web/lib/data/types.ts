@@ -20,6 +20,21 @@ export interface InventoryEntry {
   quantity: number;
 }
 
+/** Result of idempotently creating or restoring a wallet-first player. */
+export interface WalletPlayerResult {
+  trainer: TrainerProfile;
+  created: boolean;
+}
+
+/** Server-owned, single-use EIP-4361 challenge. */
+export interface WalletLoginChallenge {
+  id: string;
+  address: string;
+  nonce: string;
+  message: string;
+  expiresAt: Date;
+}
+
 export interface CaptureCommit {
   encounterId: string;
   trainerId: string;
@@ -106,11 +121,6 @@ export type CommitEvolutionResult =
   | { status: "no-item" };
 
 // ---------- Wallet & NFT (Phase 7) ----------
-
-export interface WalletChallenge {
-  nonce: string;
-  expiresAt: Date;
-}
 
 export interface MintSubmission {
   txHash: string;
@@ -266,13 +276,28 @@ export interface GameRepository {
   readonly kind: "prisma" | "memory";
 
   // Trainer
+  getTrainerById(trainerId: string): Promise<TrainerProfile | null>;
+  getTrainerByWallet(walletAddress: string): Promise<string | null>;
+  /** Idempotently create or restore one personal trainer for a verified wallet. */
+  upsertWalletPlayer(walletAddress: string): Promise<WalletPlayerResult>;
+  createWalletLoginChallenge(challenge: WalletLoginChallenge): Promise<void>;
+  getWalletLoginChallenge(nonce: string): Promise<WalletLoginChallenge | null>;
+  /** Atomically consumes an unexpired nonce after its SIWE signature is verified. */
+  consumeWalletLoginChallenge(id: string, now: Date): Promise<boolean>;
+  /** Create exactly one starter monster for a personal trainer. */
+  grantStarterMonster(trainerId: string): Promise<boolean>;
+
+  // Development/test-only compatibility helpers. Production application code
+  // must derive a trainer from requireAuthenticatedTrainer instead.
   getDemoTrainer(): Promise<TrainerProfile | null>;
   createDemoTrainer(nickname: string): Promise<TrainerProfile>;
+  /** Test-only wallet fixture helper; never call from a production route. */
+  bindWallet(trainerId: string, walletAddress: string): Promise<string>;
 
   // Monsters
   addMonster(monster: Monster): Promise<void>;
-  listMonsters(): Promise<Monster[]>;
-  getMonster(id: string): Promise<Monster | null>;
+  listMonsters(trainerId?: string): Promise<Monster[]>;
+  getMonster(id: string, trainerId?: string): Promise<Monster | null>;
   /** public read — no owner filter (Phase 8 public monster view) */
   getMonsterPublic(id: string): Promise<Monster | null>;
 
@@ -327,13 +352,6 @@ export interface GameRepository {
 
   // Wallet (Phase 7)
   getVerifiedWallet(trainerId: string): Promise<string | null>;
-  setWalletChallenge(
-    trainerId: string,
-    challenge: WalletChallenge,
-  ): Promise<void>;
-  getWalletChallenge(trainerId: string): Promise<WalletChallenge | null>;
-  /** Canonicalize + bind; clears the nonce (single use). Rejects rebinding. */
-  bindWallet(trainerId: string, walletAddress: string): Promise<string>;
 
   // NFT mint state machine (Phase 7)
   getMonsterByTokenId(tokenId: string): Promise<Monster | null>;
@@ -368,7 +386,6 @@ export interface GameRepository {
   ): Promise<void>;
 
   // Ownership sync (Phase 8)
-  getTrainerByWallet(walletAddress: string): Promise<string | null>;
   getMonstersByOnchainOwner(walletAddress: string): Promise<Monster[]>;
   setMonsterOwner(
     monsterId: string,
@@ -390,7 +407,7 @@ export interface GameRepository {
   listTrainerListings(trainerId: string): Promise<MarketplaceListingWithMonster[]>;
 
   // ---------- Pixel World (Pixel World Upgrade) ----------
-  getWorldSpawns(): Promise<WorldSpawnRecord[]>;
+  getWorldSpawns(worldMap?: string): Promise<WorldSpawnRecord[]>;
   /**
    * Append new spawns without exceeding the supplied world capacity. The
    * Prisma implementation serializes this short critical section in Postgres.
@@ -448,6 +465,7 @@ export interface GameRepository {
 
 export interface WorldSpawnRecord {
   id: string;
+  worldMap: string;
   speciesId: number;
   zoneId: string;
   x: number;

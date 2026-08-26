@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/data";
+import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/trainer-session";
 import { fleeEncounter, CaptureError } from "@/lib/services/capture-service";
 
 export const dynamic = "force-dynamic";
 
-/** End the current demo trainer's active world encounter. */
+/** End the current trainer's active world encounter. */
 export async function POST(request: Request) {
   let body: { encounterId?: string };
   try {
@@ -18,15 +19,15 @@ export async function POST(request: Request) {
 
   try {
     const repository = await getRepository();
-    const trainer = await repository.getDemoTrainer();
-    if (!trainer) {
-      return NextResponse.json({ error: "Create a trainer first." }, { status: 400 });
-    }
-    await fleeEncounter(repository, trainer.id, body.encounterId);
+    const trainerId = await requireAuthenticatedTrainer(repository);
+    await fleeEncounter(repository, trainerId, body.encounterId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof CaptureError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof TrainerSessionError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
     }
     return NextResponse.json({ error: "World temporarily unavailable." }, { status: 503 });
   }

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/data";
+import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/trainer-session";
 import { getPickupReward } from "@/lib/services/world-service";
-import { buildChainMonValley } from "@/lib/world/map-data";
+import { buildWorldMap } from "@/lib/world/map-data";
+import { normalizeWorldMapId } from "@/lib/world/world-maps";
 import { PICKUP_COOLDOWN_MS } from "@/lib/world/world-config";
 import { isWithinWorldInteractionDistance } from "@/lib/services/world-service";
 
@@ -27,18 +29,17 @@ export async function POST(request: Request) {
 
   try {
     const repository = await getRepository();
-    const trainer = await repository.getDemoTrainer();
-    if (!trainer) {
-      return NextResponse.json({ error: "Create a trainer first." }, { status: 400 });
-    }
-    const marker = buildChainMonValley().pickups.find((pickup) => pickup.pickupKey === pickupKey);
-    const position = await repository.getTrainerWorldPosition(trainer.id);
+    const trainerId = await requireAuthenticatedTrainer(repository);
+    const position = await repository.getTrainerWorldPosition(trainerId);
+    const marker = buildWorldMap(normalizeWorldMapId(position?.worldMap)).pickups.find(
+      (pickup) => pickup.pickupKey === pickupKey,
+    );
     if (!marker || !position || !isWithinWorldInteractionDistance(position, marker)) {
       return NextResponse.json({ ok: false, error: "Move closer to this pickup." }, { status: 400 });
     }
 
     const result = await repository.claimPickupReward(
-      trainer.id,
+      trainerId,
       pickupKey,
       new Date(),
       PICKUP_COOLDOWN_MS,
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const inventory = await repository.getInventory(trainer.id);
+    const inventory = await repository.getInventory(trainerId);
     return NextResponse.json({
       ok: true,
       reward,
@@ -67,7 +68,10 @@ export async function POST(request: Request) {
         ? `Found ${reward.quantity}× ${reward.itemSlug.replace(/-/g, " ")}!`
         : `Found ${reward.gold} gold!`,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof TrainerSessionError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
+    }
     return NextResponse.json(
       { error: "World temporarily unavailable." },
       { status: 503 },

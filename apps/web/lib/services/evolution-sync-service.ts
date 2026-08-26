@@ -48,7 +48,7 @@ export async function evolveMintedMonster(
   trainerId: string,
   monsterId: string,
 ): Promise<EvolutionSyncResult> {
-  const monster = await repository.getMonster(monsterId);
+  const monster = await repository.getMonsterPublic(monsterId);
   if (!monster) throw new EvolutionSyncError("Monster not found.");
   if (monster.owner !== trainerId) {
     throw new EvolutionSyncError("You don't own this monster.");
@@ -278,7 +278,7 @@ export async function getEvolutionSyncState(
   trainerId: string,
   monsterId: string,
 ): Promise<OnchainEvolutionJob | null> {
-  const monster = await repository.getMonster(monsterId);
+  const monster = await repository.getMonsterPublic(monsterId);
   if (!monster || monster.owner !== trainerId) return null;
   const jobs = await repository.getOnchainEvolutionByMonster(monster.id);
   return jobs[0] ?? null;

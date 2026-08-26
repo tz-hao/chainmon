@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/data";
+import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/trainer-session";
 import { startWorldEncounter, WorldError } from "@/lib/services/world-service";
 
 export const dynamic = "force-dynamic";
@@ -21,18 +22,18 @@ export async function POST(request: Request) {
 
   try {
     const repository = await getRepository();
-    const trainer = await repository.getDemoTrainer();
-    if (!trainer) {
-      return NextResponse.json({ error: "Create a trainer first." }, { status: 400 });
-    }
+    const trainerId = await requireAuthenticatedTrainer(repository);
     const result = await startWorldEncounter(repository, {
-      trainerId: trainer.id,
+      trainerId,
       spawnId: body.spawnId,
     });
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof WorldError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    if (error instanceof TrainerSessionError) {
+      return NextResponse.json({ error: error.message }, { status: 401 });
     }
     return NextResponse.json(
       { error: "World temporarily unavailable." },

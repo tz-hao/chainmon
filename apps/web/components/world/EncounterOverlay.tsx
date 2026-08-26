@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
+import type { WorldStateResponse } from "@/lib/world/world-types";
 import { getSpeciesById } from "@chainmon/monster-data";
 import { NATIVE_CURRENCY_SYMBOL } from "@/lib/web3/chain";
 
@@ -20,6 +21,7 @@ export interface EncounterData {
 
 interface EncounterOverlayProps {
   encounter: EncounterData;
+  inventory: WorldStateResponse["inventory"];
   onClose: () => void;
   onCaptured: () => void;
 }
@@ -36,7 +38,7 @@ type ThrowState =
  * capsule selector. Capture attempts keep the encounter alive on failure —
  * only Run ends it (per the upgraded capture loop).
  */
-export function EncounterOverlay({ encounter, onClose, onCaptured }: EncounterOverlayProps) {
+export function EncounterOverlay({ encounter, inventory, onClose, onCaptured }: EncounterOverlayProps) {
   const species = getSpeciesById(encounter.speciesId);
   const [ball, setBall] = useState("basic-ball");
   const [throwState, setThrowState] = useState<ThrowState>({ phase: "idle" });
@@ -107,6 +109,8 @@ export function EncounterOverlay({ encounter, onClose, onCaptured }: EncounterOv
     "great-ball": "Great Capsule",
     "ultra-ball": "Ultra Capsule",
   };
+  const ballCount = (slug: string) => inventory.find((item) => item.slug === slug)?.quantity ?? 0;
+  const selectedBallCount = ballCount(ball);
 
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
@@ -168,13 +172,17 @@ export function EncounterOverlay({ encounter, onClose, onCaptured }: EncounterOv
           (Basic / Great / Ultra capsules)
         </div>
 
+        <p className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-center text-xs text-emerald-100">
+          选择一种捕捉球，然后点击 <span className="font-bold">Throw Ball</span>。捕捉失败后可以继续投掷，Run 会结束本次遭遇。
+        </p>
+
         {/* Ball selector */}
         <div className="mt-3 grid grid-cols-3 gap-2">
           {(["basic-ball", "great-ball", "ultra-ball"] as const).map((slug) => (
             <button
               key={slug}
               type="button"
-              disabled={busy}
+              disabled={busy || ballCount(slug) === 0}
               onClick={() => setBall(slug)}
               className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
                 ball === slug
@@ -182,7 +190,7 @@ export function EncounterOverlay({ encounter, onClose, onCaptured }: EncounterOv
                   : "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500"
               } disabled:opacity-50`}
             >
-              {ballLabels[slug]}
+              {ballLabels[slug]} ×{ballCount(slug)}
             </button>
           ))}
         </div>
@@ -191,7 +199,7 @@ export function EncounterOverlay({ encounter, onClose, onCaptured }: EncounterOv
         <div className="mt-4 flex gap-2">
           <button
             type="button"
-            disabled={busy || throwState.phase === "throwing" || throwState.phase === "caught"}
+            disabled={busy || selectedBallCount === 0 || throwState.phase === "throwing" || throwState.phase === "caught"}
             onClick={() => void throwBall()}
             className="flex-1 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-emerald-500 disabled:opacity-50"
           >
@@ -199,7 +207,7 @@ export function EncounterOverlay({ encounter, onClose, onCaptured }: EncounterOv
               ? "Throwing..."
               : busy
                 ? "Throwing..."
-                : "Throw Capsule"}
+                : "Throw Ball"}
           </button>
           {throwState.phase === "caught" ? (
             <button

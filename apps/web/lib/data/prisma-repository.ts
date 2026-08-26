@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { getCaptureBall, type WildEncounter } from "@chainmon/game-engine";
+import { generateMonster, getCaptureBall, type WildEncounter } from "@chainmon/game-engine";
 import type {
   BattleLogEntry,
   BattleState,
@@ -7,8 +7,10 @@ import type {
   BattleWinner,
 } from "@chainmon/game-engine";
 import {
+  getSpeciesBySlug,
   getSpeciesById,
   SKILLS,
+  STARTER_SPECIES_SLUGS,
 } from "@chainmon/monster-data";
 import type {
   MintStatus,
@@ -19,7 +21,7 @@ import type {
 } from "@chainmon/shared";
 import { getAddress } from "viem";
 import { prisma } from "@/lib/prisma";
-import { DEMO_EMAIL } from "./demo";
+import { DEMO_WALLET_ADDRESS } from "./demo";
 import { STARTER_INVENTORY } from "./starter-inventory";
 import type {
   BattleRecord,
@@ -47,7 +49,8 @@ import type {
   RewardSettleContext,
   SubmitRoundInput,
   SubmitRoundResult,
-  WalletChallenge,
+  WalletLoginChallenge,
+  WalletPlayerResult,
   WorldPickupClaimRecord,
   WorldSpawnRecord,
 } from "./types";
@@ -64,6 +67,11 @@ async function getUserForTrainer(trainerId: string) {
     include: { user: true },
   });
   return trainer?.user ?? null;
+}
+
+function generatedTrainerNickname(walletAddress: string): string {
+  const compact = walletAddress.slice(-8).toUpperCase();
+  return `Trainer-${compact || "NEW"}`;
 }
 
 const ELEMENT_TO_SHARED: Record<string, Monster["element"]> = {
@@ -422,9 +430,134 @@ function prismaRewardCtx(
 export const prismaRepository: GameRepository = {
   kind: "prisma",
 
+  async getTrainerById(trainerId) {
+    const trainer = await prisma.trainer.findUnique({ where: { id: trainerId } });
+    return trainer ? toTrainerProfile(trainer) : null;
+  },
+
+  async getTrainerByWallet(walletAddress) {
+    const canonical = getAddress(walletAddress).toLowerCase();
+    const user = await prisma.user.findUnique({
+      where: { walletAddress: canonical },
+      include: { trainer: true },
+    });
+    return user?.trainer?.id ?? null;
+  },
+
+  async upsertWalletPlayer(walletAddress: string): Promise<WalletPlayerResult> {
+    const canonicalWalletAddress = getAddress(walletAddress).toLowerCase();
+    const user = await prisma.user.upsert({
+      where: { walletAddress: canonicalWalletAddress },
+      update: { walletVerifiedAt: new Date() },
+      create: {
+        walletAddress: canonicalWalletAddress,
+        walletVerifiedAt: new Date(),
+      },
+    });
+
+    const existingTrainer = await prisma.trainer.findUnique({
+      where: { userId: user.id },
+    });
+    if (existingTrainer) {
+      return { trainer: toTrainerProfile(existingTrainer), created: false };
+    }
+
+    const baseNickname = generatedTrainerNickname(canonicalWalletAddress);
+    let nickname = baseNickname;
+    for (let suffix = 1; suffix <= 100; suffix += 1) {
+      const collision = await prisma.trainer.findUnique({ where: { nickname } });
+      if (!collision) break;
+      nickname = `${baseNickname}-${suffix}`;
+      if (suffix === 100) {
+        throw new Error("Could not allocate a trainer nickname. Please try again.");
+      }
+    }
+    try {
+      const trainer = await prisma.trainer.create({
+        data: { userId: user.id, nickname },
+      });
+      return { trainer: toTrainerProfile(trainer), created: true };
+    } catch (error) {
+      // Wallet logins can race. The unique Trainer.userId constraint is the
+      // source of truth: re-read it rather than ever creating a second trainer.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        const racedTrainer = await prisma.trainer.findUnique({ where: { userId: user.id } });
+        if (racedTrainer) return { trainer: toTrainerProfile(racedTrainer), created: false };
+      }
+      throw error;
+    }
+  },
+
+  async createWalletLoginChallenge(challenge: WalletLoginChallenge) {
+    await prisma.walletLoginChallenge.create({
+      data: {
+        id: challenge.id,
+        address: getAddress(challenge.address).toLowerCase(),
+        nonce: challenge.nonce,
+        message: challenge.message,
+        expiresAt: challenge.expiresAt,
+      },
+    });
+  },
+
+  async getWalletLoginChallenge(nonce: string) {
+    const row = await prisma.walletLoginChallenge.findUnique({ where: { nonce } });
+    return row
+      ? {
+          id: row.id,
+          address: row.address,
+          nonce: row.nonce,
+          message: row.message,
+          expiresAt: row.expiresAt,
+        }
+      : null;
+  },
+
+  async consumeWalletLoginChallenge(id: string, now: Date) {
+    const result = await prisma.walletLoginChallenge.updateMany({
+      where: { id, consumedAt: null, expiresAt: { gt: now } },
+      data: { consumedAt: now },
+    });
+    return result.count === 1;
+  },
+
+  async grantStarterMonster(trainerId) {
+    const starter = getSpeciesBySlug(STARTER_SPECIES_SLUGS[0]);
+    if (!starter) throw new Error("Starter species registry is unavailable.");
+    return prisma.$transaction(async (tx) => {
+      const claim = await tx.trainer.updateMany({
+        where: { id: trainerId, starterMonsterClaimed: false },
+        data: { starterMonsterClaimed: true },
+      });
+      if (claim.count === 0) return false;
+      const monster = generateMonster(starter, { owner: trainerId });
+      const links = await skillLinksFor(tx, monster);
+      await tx.monster.create({
+        data: {
+          id: monster.id,
+          speciesId: monster.speciesId,
+          name: monster.name,
+          level: monster.level,
+          exp: monster.exp,
+          hp: monster.hp,
+          attack: monster.attack,
+          defense: monster.defense,
+          speed: monster.speed,
+          dna: monster.dna as unknown as Prisma.InputJsonValue,
+          generation: monster.generation,
+          battleCount: monster.battleCount,
+          wins: monster.wins,
+          ownerId: trainerId,
+          skills: { create: links },
+        },
+      });
+      return true;
+    });
+  },
+
   async getDemoTrainer() {
     const user = await prisma.user.findUnique({
-      where: { email: DEMO_EMAIL },
+      where: { walletAddress: DEMO_WALLET_ADDRESS },
       include: { trainer: true },
     });
     return user?.trainer ? toTrainerProfile(user.trainer) : null;
@@ -432,9 +565,9 @@ export const prismaRepository: GameRepository = {
 
   async createDemoTrainer(nickname) {
     const user = await prisma.user.upsert({
-      where: { email: DEMO_EMAIL },
-      update: {},
-      create: { email: DEMO_EMAIL },
+      where: { walletAddress: DEMO_WALLET_ADDRESS },
+      update: { walletVerifiedAt: new Date() },
+      create: { walletAddress: DEMO_WALLET_ADDRESS, walletVerifiedAt: new Date() },
     });
     const trainer = await prisma.trainer.upsert({
       where: { userId: user.id },
@@ -445,10 +578,20 @@ export const prismaRepository: GameRepository = {
     return toTrainerProfile(trainer);
   },
 
+  async bindWallet(trainerId: string, walletAddress: string): Promise<string> {
+    const canonical = getAddress(walletAddress).toLowerCase();
+    const user = await getUserForTrainer(trainerId);
+    if (!user) throw new Error("Trainer not found.");
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { walletAddress: canonical, walletVerifiedAt: new Date() },
+    });
+    return canonical;
+  },
+
   async addMonster(monster) {
-    const trainer = await this.getDemoTrainer();
-    if (!trainer) {
-      throw new Error("No demo trainer — create one first.");
+    if (!monster.owner) {
+      throw new Error("A monster owner is required.");
     }
     const links = await skillLinksFor(prisma, monster);
     await prisma.monster.create({
@@ -466,14 +609,14 @@ export const prismaRepository: GameRepository = {
         generation: monster.generation,
         battleCount: monster.battleCount,
         wins: monster.wins,
-        ownerId: trainer.id,
+        ownerId: monster.owner,
         skills: { create: links },
       },
     });
   },
 
-  async listMonsters() {
-    const trainer = await this.getDemoTrainer();
+  async listMonsters(trainerId?: string) {
+    const trainer = trainerId ? await this.getTrainerById(trainerId) : null;
     if (!trainer) return [];
     const rows = await prisma.monster.findMany({
       where: { ownerId: trainer.id },
@@ -483,8 +626,8 @@ export const prismaRepository: GameRepository = {
     return rows.map(toMonster);
   },
 
-  async getMonster(id) {
-    const trainer = await this.getDemoTrainer();
+  async getMonster(id, trainerId?: string) {
+    const trainer = trainerId ? await this.getTrainerById(trainerId) : null;
     if (!trainer) return null;
     const row = await prisma.monster.findFirst({
       where: { id, ownerId: trainer.id },
@@ -868,43 +1011,6 @@ export const prismaRepository: GameRepository = {
     return user?.walletAddress ?? null;
   },
 
-  async setWalletChallenge(trainerId: string, challenge: WalletChallenge) {
-    const user = await getUserForTrainer(trainerId);
-    if (!user) throw new Error("Trainer not found.");
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        walletNonce: challenge.nonce,
-        walletNonceExpiresAt: challenge.expiresAt,
-      },
-    });
-  },
-
-  async getWalletChallenge(trainerId): Promise<WalletChallenge | null> {
-    const user = await getUserForTrainer(trainerId);
-    if (!user?.walletNonce || !user.walletNonceExpiresAt) return null;
-    return { nonce: user.walletNonce, expiresAt: user.walletNonceExpiresAt };
-  },
-
-  async bindWallet(trainerId: string, walletAddress: string): Promise<string> {
-    const canonical = getAddress(walletAddress).toLowerCase();
-    const user = await getUserForTrainer(trainerId);
-    if (!user) throw new Error("User not found.");
-    if (user.walletAddress && user.walletAddress !== canonical) {
-      throw new Error("Wallet rebinding is not supported yet.");
-    }
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        walletAddress: canonical,
-        walletVerifiedAt: new Date(),
-        walletNonce: null,
-        walletNonceExpiresAt: null,
-      },
-    });
-    return canonical;
-  },
-
   // ---------------- NFT mint state machine (Phase 7) ----------------
 
   async getMonsterByTokenId(tokenId) {
@@ -1043,15 +1149,6 @@ export const prismaRepository: GameRepository = {
 
   // ---------------- Ownership sync (Phase 8) ----------------
 
-  async getTrainerByWallet(walletAddress) {
-    const canonical = getAddress(walletAddress).toLowerCase();
-    const user = await prisma.user.findUnique({
-      where: { walletAddress: canonical },
-      include: { trainer: true },
-    });
-    return user?.trainer?.id ?? null;
-  },
-
   async getMonstersByOnchainOwner(walletAddress) {
     const rows = await prisma.monster.findMany({
       where: { onchainOwnerAddress: walletAddress, mintStatus: "MINT_CONFIRMED" },
@@ -1156,10 +1253,14 @@ export const prismaRepository: GameRepository = {
 
   // ---------------- Pixel World ----------------
 
-  async getWorldSpawns(): Promise<WorldSpawnRecord[]> {
-    const rows = await prisma.worldSpawn.findMany({ orderBy: { createdAt: "asc" } });
+  async getWorldSpawns(worldMap?: string): Promise<WorldSpawnRecord[]> {
+    const rows = await prisma.worldSpawn.findMany({
+      where: worldMap ? { worldMap } : undefined,
+      orderBy: { createdAt: "asc" },
+    });
     return rows.map((row) => ({
       id: row.id,
+      worldMap: row.worldMap,
       speciesId: row.speciesId,
       zoneId: row.zoneId,
       x: row.x,
@@ -1176,14 +1277,16 @@ export const prismaRepository: GameRepository = {
       // A transaction-scoped advisory lock serializes lazy reconciliation
       // across Node processes without adding a background worker or schema.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(81720341)`;
+      const worldMap = spawns[0]?.worldMap;
       const current = await tx.worldSpawn.count({
-        where: { expiresAt: { gt: new Date() } },
+        where: { expiresAt: { gt: new Date() }, ...(worldMap ? { worldMap } : {}) },
       });
       const allowed = Math.max(0, capacity - current);
       if (allowed === 0) return;
       await tx.worldSpawn.createMany({
         data: spawns.slice(0, allowed).map((s) => ({
           id: s.id,
+          worldMap: s.worldMap,
           speciesId: s.speciesId,
           zoneId: s.zoneId,
           x: s.x,
@@ -1333,6 +1436,9 @@ export const prismaRepository: GameRepository = {
       const items = await tx.item.findMany({
         where: { slug: { in: Object.keys(STARTER_INVENTORY) } },
       });
+      if (items.length !== Object.keys(STARTER_INVENTORY).length) {
+        throw new Error("Canonical starter items must be seeded before creating a player.");
+      }
       for (const item of items) {
         const qty = STARTER_INVENTORY[item.slug] ?? 0;
         await tx.inventory.upsert({

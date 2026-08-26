@@ -13,7 +13,7 @@ import Phaser from "phaser";
 import type { WorldStateResponse } from "../../lib/world/world-types";
 import {
   BLOCKED_TILES,
-  buildChainMonValley,
+  buildWorldMap,
   type WorldMapData,
 } from "../../lib/world/map-data";
 import {
@@ -23,12 +23,20 @@ import {
   MONSTER_OVERWORLD_SCALE,
   POSITION_SAVE_THROTTLE_MS,
 } from "../../lib/world/world-config";
-import { zoneNameAt, seededRandom } from "../../lib/world/zones";
+import { seededRandom } from "../../lib/world/zones";
 import { getMonsterVisualPath } from "../../lib/world/monster-visuals";
 import { ensureMonsterTexture, ensurePlayerTextures } from "../textures/pixel-art";
 
 const EMPTY_WORLD_STATE: WorldStateResponse = {
-  trainer: { id: "", nickname: "Trainer", gold: 0, worldX: 30, worldY: 24, zoneId: null },
+  trainer: {
+    id: "",
+    nickname: "Trainer",
+    gold: 0,
+    worldMap: "whispering-forest",
+    worldX: 30,
+    worldY: 24,
+    zoneId: null,
+  },
   spawns: [],
   pickups: [],
   dailySupply: { ready: false, nextAt: null },
@@ -43,6 +51,7 @@ interface WildMonsterSprite {
   spawnId: string;
   speciesId: number;
   sprite: Phaser.Physics.Arcade.Sprite;
+  marker: Phaser.GameObjects.Text;
   state: "idle" | "walk";
   idleTimer: number;
   walkTimer: number;
@@ -62,6 +71,7 @@ export class WorldScene extends Phaser.Scene {
   private lastFacing: "down" | "left" | "right" | "up" = "down";
   private nearInteract: { kind: string; id: string; label: string } | null = null;
   private interactHint!: Phaser.GameObjects.Text;
+  private pendingEncounterSpawnId: string | null = null;
 
   constructor() {
     super({ key: "WorldScene" });
@@ -89,8 +99,10 @@ export class WorldScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.map = buildChainMonValley();
+    const worldState = this.game.registry.get("worldState") as WorldStateResponse;
+    this.map = buildWorldMap(worldState.trainer.worldMap);
     this.renderMap();
+    this.renderLandmarks();
     this.spawnPlayer();
     this.setupCamera();
     this.spawnWildMonsters();
@@ -121,6 +133,56 @@ export class WorldScene extends Phaser.Scene {
     return !BLOCKED_TILES.has(code);
   }
 
+  /** Make the purpose of camp NPCs and world rewards clear at a glance. */
+  private renderLandmarks(): void {
+    const placeNpc = (
+      x: number,
+      y: number,
+      texture: "npc-shop" | "npc-guide",
+      label: string,
+      color: string,
+    ) => {
+      const px = x * WORLD_TILE_SIZE + WORLD_TILE_SIZE / 2;
+      const py = y * WORLD_TILE_SIZE + WORLD_TILE_SIZE / 2;
+      this.add.sprite(px, py, texture).setDepth(6);
+      this.add
+        .text(px, py - 24, label, {
+          fontFamily: "monospace",
+          fontSize: "10px",
+          color,
+          backgroundColor: "#101828cc",
+          padding: { x: 3, y: 2 },
+        })
+        .setOrigin(0.5)
+        .setDepth(7);
+    };
+
+    placeNpc(this.map.shopNpc.x, this.map.shopNpc.y, "npc-shop", "BALL SHOP", "#fcd34d");
+    placeNpc(this.map.guideNpc.x, this.map.guideNpc.y, "npc-guide", "新手指南", "#86efac");
+
+    const worldState = this.game.registry.get("worldState") as WorldStateResponse;
+    for (const pickup of worldState.pickups ?? []) {
+      if (!pickup.available) continue;
+      const texture =
+        pickup.kind === "gold-chest"
+          ? "pickup-gold"
+          : pickup.kind === "purple-spark"
+            ? "pickup-purple"
+            : "pickup-blue";
+      const px = pickup.x * WORLD_TILE_SIZE + WORLD_TILE_SIZE / 2;
+      const py = pickup.y * WORLD_TILE_SIZE + WORLD_TILE_SIZE / 2;
+      const sprite = this.add.sprite(px, py, texture).setDepth(6);
+      this.tweens.add({
+        targets: sprite,
+        y: py - 3,
+        duration: 850,
+        yoyo: true,
+        repeat: -1,
+        ease: "Sine.easeInOut",
+      });
+    }
+  }
+
   // ---------------------------------------------------------------- player
 
   private spawnPlayer(): void {
@@ -136,6 +198,7 @@ export class WorldScene extends Phaser.Scene {
     this.player = this.physics.add
       .sprite(startX, startY, "player-down-0")
       .setScale(PLAYER_RENDER_SCALE)
+      .setCollideWorldBounds(true)
       .setDepth(10);
     this.lastFacing = "down";
     this.player.play("player-anim-down");
@@ -145,8 +208,8 @@ export class WorldScene extends Phaser.Scene {
     const worldWidth = this.map.cols * WORLD_TILE_SIZE;
     const worldHeight = this.map.rows * WORLD_TILE_SIZE;
     this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
-    this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
-    this.cameras.main.setDeadzone(140, 90);
+    this.cameras.main.startFollow(this.player, true, 0.18, 0.18);
+    this.cameras.main.setDeadzone(0, 0);
     this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
   }
 
@@ -187,13 +250,25 @@ export class WorldScene extends Phaser.Scene {
       const sprite = this.physics.add
         .sprite(px, py, textureKey)
         .setScale(MONSTER_OVERWORLD_SCALE)
+        .setCollideWorldBounds(true)
         .setDepth(5);
+      const marker = this.add
+        .text(px, py - 26, "✦", {
+          fontFamily: "monospace",
+          fontSize: "14px",
+          color: "#fde68a",
+          stroke: "#1e293b",
+          strokeThickness: 2,
+        })
+        .setOrigin(0.5)
+        .setDepth(8);
       const rng = seededRandom(spawn.speciesId * 7919 + (spawn.x * 13 + spawn.y * 17));
       const rare = spawn.speciesId >= 18;
       this.monsters.push({
         spawnId: spawn.spawnId,
         speciesId: spawn.speciesId,
         sprite,
+        marker,
         state: "idle",
         idleTimer: 600 + rng() * 1400,
         walkTimer: 0,
@@ -241,7 +316,8 @@ export class WorldScene extends Phaser.Scene {
     const speedPx = PLAYER_SPEED * PLAYER_RENDER_SCALE;
 
     // --- Tile collision (axis-separated): water/rock/tree/wall/NPC block ---
-    const half = WORLD_TILE_SIZE * PLAYER_RENDER_SCALE * 0.32;
+    // Player scale and all collision checks use the same source-pixel units.
+    const half = WORLD_TILE_SIZE * PLAYER_RENDER_SCALE * 0.75;
     const tileX = Math.floor(this.player.x / WORLD_TILE_SIZE);
     const tileY = Math.floor(this.player.y / WORLD_TILE_SIZE);
 
@@ -312,6 +388,7 @@ export class WorldScene extends Phaser.Scene {
           m.sprite.setVelocity(0, 0);
         }
       }
+      m.marker.setPosition(m.sprite.x, m.sprite.y - 26);
       void time;
     }
   }
@@ -319,7 +396,7 @@ export class WorldScene extends Phaser.Scene {
   private updateInteraction(): void {
     const playerTileX = Math.floor(this.player.x / WORLD_TILE_SIZE);
     const playerTileY = Math.floor(this.player.y / WORLD_TILE_SIZE);
-    const zoneName = zoneNameAt(playerTileX, playerTileY);
+    const zoneName = this.map.name;
     if (zoneName !== this.lastZoneName) {
       this.lastZoneName = zoneName;
       window.dispatchEvent(
@@ -327,6 +404,26 @@ export class WorldScene extends Phaser.Scene {
           detail: { zoneName },
         }),
       );
+    }
+
+    // After running from an encounter, suppress only that same nearby spawn.
+    // Once the trainer has stepped away, proximity encounters become available
+    // again (including for other wild ChainMon).
+    if (this.pendingEncounterSpawnId) {
+      const pendingMonster = this.monsters.find(
+        (monster) => monster.spawnId === this.pendingEncounterSpawnId,
+      );
+      if (
+        !pendingMonster ||
+        Phaser.Math.Distance.Between(
+          this.player.x,
+          this.player.y,
+          pendingMonster.sprite.x,
+          pendingMonster.sprite.y,
+        ) > 96
+      ) {
+        this.pendingEncounterSpawnId = null;
+      }
     }
 
     let near: { kind: string; id: string; label: string } | null = null;
@@ -337,8 +434,25 @@ export class WorldScene extends Phaser.Scene {
         m.sprite.x,
         m.sprite.y,
       );
-      if (dist < 40) {
-        near = { kind: "monster", id: m.spawnId, label: "Press E to encounter" };
+      if (dist < 64) {
+        if (dist < 32 && !this.pendingEncounterSpawnId) {
+          this.pendingEncounterSpawnId = m.spawnId;
+          window.dispatchEvent(
+            new CustomEvent("phaser:interact", {
+              detail: {
+                kind: "monster",
+                id: m.spawnId,
+                x: playerTileX,
+                y: playerTileY,
+              },
+            }),
+          );
+        }
+        near = {
+          kind: "monster",
+          id: m.spawnId,
+          label: "接触野生精灵即可遭遇 · E 也可触发",
+        };
         break;
       }
     }
@@ -348,7 +462,11 @@ export class WorldScene extends Phaser.Scene {
     }
     if (!near) {
       const npc = this.findNearNpc(playerTileX, playerTileY);
-      if (npc) near = { kind: npc.kind, id: npc.id, label: "Press E to talk" };
+      if (npc) near = {
+        kind: npc.kind,
+        id: npc.id,
+        label: npc.kind === "guide" ? "Press E for 新手指南" : "Press E for Ball Shop",
+      };
     }
     this.nearInteract = near;
     if (near && this.player.active) {
@@ -421,6 +539,7 @@ export class WorldScene extends Phaser.Scene {
     for (const m of this.monsters) {
       if (spawnIdsToRemove.includes(m.spawnId)) {
         m.sprite.destroy();
+        m.marker.destroy();
       }
     }
     this.monsters = this.monsters.filter((m) => !spawnIdsToRemove.includes(m.spawnId));

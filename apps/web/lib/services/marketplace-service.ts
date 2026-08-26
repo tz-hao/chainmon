@@ -146,7 +146,9 @@ export async function validateSellerEligibility(
   trainerId: string,
   monsterId: string,
 ): Promise<{ monster: Monster; wallet: string; tokenId: string }> {
-  const monster = await repository.getMonster(monsterId);
+  // Explicit public read is safe here because ownership is checked immediately
+  // below; scoped reads remain mandatory for ordinary collection operations.
+  const monster = await repository.getMonsterPublic(monsterId);
   if (!monster) throw new MarketplaceError("Monster not found.");
   if (monster.owner !== trainerId) {
     throw new MarketplaceError("You don't own this monster.");

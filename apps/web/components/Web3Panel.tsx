@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useAccount, useChainId, useSwitchChain } from "wagmi";
 import type { Monster } from "@chainmon/shared";
-import { BLOCK_EXPLORER_URL } from "@/lib/web3/chain";
+import { BLOCK_EXPLORER_URL, CHAINMON_CHAIN_ID } from "@/lib/web3/chain";
 
 interface ClaimResult {
   status: string;
@@ -34,13 +35,16 @@ const STATUS_LABELS: Record<string, string> = {
  */
 export function Web3Panel({ monster }: { monster: Monster }) {
   const router = useRouter();
+  const chainId = useChainId();
+  const { isConnected } = useAccount();
+  const { switchChain, isPending: isSwitchingNetwork } = useSwitchChain();
   const [busy, setBusy] = useState<"claim" | "refresh" | "evolve" | null>(null);
   const [result, setResult] = useState<ClaimResult | EvolveResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const status = monster.mintStatus ?? "OFFCHAIN";
-  const trainerId = monster.owner;
-
+  const targetChainId = CHAINMON_CHAIN_ID;
+  const wrongNetwork = isConnected && chainId !== targetChainId;
   async function run(path: string, body: object, kind: "claim" | "refresh" | "evolve") {
     setBusy(kind);
     setError(null);
@@ -49,7 +53,7 @@ export function Web3Panel({ monster }: { monster: Monster }) {
       const res = await fetch(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trainerId, monsterId: monster.id, ...body }),
+        body: JSON.stringify({ monsterId: monster.id, ...body }),
       });
       const data = (await res.json()) as ClaimResult & EvolveResult;
       if (!res.ok) {
@@ -137,14 +141,26 @@ export function Web3Panel({ monster }: { monster: Monster }) {
             ) : null}
           </p>
           <p className="text-xs text-slate-500">
-            Claiming mints the NFT to your verified wallet. The transaction is
-            sent by the game backend — you only need to sign a verification
-            message (no gas).
+            普通探索不需要 MON。只有你主动 Claim NFT 时才会进入 Monad 测试网
+            流程，并显示一次明确的链上操作提示。
           </p>
+          {wrongNetwork ? (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              <p>Claim NFT 是链上操作，请先切换到 Monad Testnet。</p>
+              <button
+                type="button"
+                disabled={isSwitchingNetwork}
+                onClick={() => switchChain({ chainId: targetChainId })}
+                className="mt-2 rounded-md border border-red-400/40 px-2.5 py-1 font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+              >
+                {isSwitchingNetwork ? "切换中..." : "切换到 Monad Testnet"}
+              </button>
+            </div>
+          ) : null}
           {(status === "OFFCHAIN" || status === "MINT_FAILED") && (
             <button
               type="button"
-              disabled={busy !== null}
+              disabled={busy !== null || wrongNetwork}
               onClick={() => run("/api/nft/claim", {}, "claim")}
               className="w-full rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-50"
             >

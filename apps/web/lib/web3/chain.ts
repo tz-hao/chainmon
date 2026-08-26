@@ -17,13 +17,13 @@ import { defineChain } from "viem";
 export const CHAINMON_CHAIN_ID = Number(
   process.env.NEXT_PUBLIC_CHAINMON_CHAIN_ID ??
     process.env.CHAINMON_CHAIN_ID ??
-    31337,
+    10143,
 );
 
 export const CHAINMON_RPC_URL =
-  process.env.NEXT_PUBLIC_CHAINMON_RPC_URL ??
   process.env.CHAINMON_RPC_URL ??
-  "http://127.0.0.1:8545";
+  process.env.NEXT_PUBLIC_CHAINMON_RPC_URL ??
+  "https://testnet-rpc.monad.xyz";
 
 export const MONSTER_NFT_ADDRESS = (
   process.env.NEXT_PUBLIC_MONSTER_NFT_ADDRESS ??

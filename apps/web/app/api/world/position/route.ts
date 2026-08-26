@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getRepository } from "@/lib/data";
+import { requireAuthenticatedTrainer, TrainerSessionError } from "@/lib/auth/trainer-session";
 import { validateWorldPosition } from "@/lib/services/world-service";
+import { normalizeWorldMapId } from "@/lib/world/world-maps";
 
 export const dynamic = "force-dynamic";
 
@@ -24,17 +26,19 @@ export async function POST(request: Request) {
 
   try {
     const repository = await getRepository();
-    const trainer = await repository.getDemoTrainer();
-    if (!trainer) {
-      return NextResponse.json({ ok: false }, { status: 400 });
-    }
-    await repository.saveTrainerWorldPosition(trainer.id, {
-      worldMap: "chainmon-valley",
+    const trainerId = await requireAuthenticatedTrainer(repository);
+    const current = await repository.getTrainerWorldPosition(trainerId);
+    const worldMap = normalizeWorldMapId(current?.worldMap);
+    await repository.saveTrainerWorldPosition(trainerId, {
+      worldMap,
       worldX: x,
       worldY: y,
     });
     return NextResponse.json({ ok: true, x, y });
-  } catch {
+  } catch (error) {
+    if (error instanceof TrainerSessionError) {
+      return NextResponse.json({ ok: false, error: error.message }, { status: 401 });
+    }
     return NextResponse.json({ ok: false }, { status: 503 });
   }
 }

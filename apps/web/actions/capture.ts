@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { getRepository } from "@/lib/data";
+import { getCurrentTrainer } from "@/lib/auth/current-trainer";
 import {
   CaptureError,
   fleeEncounter,
@@ -21,11 +21,7 @@ export async function throwBallAction(
   const encounterId = String(formData.get("encounterId") ?? "");
   const ballSlug = String(formData.get("ballSlug") ?? "");
 
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  if (!trainer) {
-    return { ok: false, error: "Create a trainer first." };
-  }
+  const { repository, trainer } = await getCurrentTrainer();
 
   try {
     const result = await throwBall(repository, {
@@ -55,11 +51,7 @@ export async function fleeAction(
 ): Promise<FleeActionResult> {
   const encounterId = String(formData.get("encounterId") ?? "");
 
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  if (!trainer) {
-    return { ok: false, error: "Create a trainer first." };
-  }
+  const { repository, trainer } = await getCurrentTrainer();
 
   try {
     await fleeEncounter(repository, trainer.id, encounterId);

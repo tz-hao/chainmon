@@ -1,11 +1,11 @@
-import { randomId } from "@chainmon/game-engine";
+import { generateMonster, randomId } from "@chainmon/game-engine";
 import { getCaptureBall } from "@chainmon/game-engine";
 import type { WildEncounter } from "@chainmon/game-engine";
 import type {
   BattleLogEntry,
   BattleState,
 } from "@chainmon/game-engine";
-import { SKILLS } from "@chainmon/monster-data";
+import { getSpeciesBySlug, SKILLS, STARTER_SPECIES_SLUGS } from "@chainmon/monster-data";
 import { getAddress } from "viem";
 import type {
   MintStatus,
@@ -37,7 +37,8 @@ import type {
   RewardSettleContext,
   SubmitRoundInput,
   SubmitRoundResult,
-  WalletChallenge,
+  WalletLoginChallenge,
+  WalletPlayerResult,
   WorldPickupClaimRecord,
   WorldSpawnRecord,
 } from "./types";
@@ -61,8 +62,6 @@ interface MemoryBattle {
 
 interface MemoryWallet {
   address: string | null;
-  nonce: string | null;
-  nonceExpiresAt: Date | null;
 }
 
 interface MemoryState {
@@ -84,6 +83,8 @@ interface MemoryState {
   pickupClaims: WorldPickupClaimRecord[];
   dailySupplyAt: Date | null;
   starterSupplyClaimed: boolean;
+  starterMonsterClaimed: boolean;
+  walletLoginChallenges: Map<string, WalletLoginChallenge>;
   /** TEST-ONLY: simulates additional trainers bound to wallets (multi-trainer
    *  scenarios like marketplace sales). Never used by production code. */
   walletTestOwners: Map<string, string>;
@@ -99,14 +100,16 @@ const state: MemoryState = {
   team: new Map(),
   battles: [],
   evolutions: [],
-  wallet: { address: null, nonce: null, nonceExpiresAt: null },
+  wallet: { address: null },
   onchainEvolutions: [],
   listings: [],
   worldSpawns: [],
-  worldPosition: { worldMap: "chainmon-valley", worldX: 30, worldY: 24 },
+  worldPosition: { worldMap: "whispering-forest", worldX: 30, worldY: 24 },
   pickupClaims: [],
   dailySupplyAt: null,
   starterSupplyClaimed: false,
+  starterMonsterClaimed: false,
+  walletLoginChallenges: new Map(),
   walletTestOwners: new Map(),
   trainerTestWallets: new Map(),
 };
@@ -120,7 +123,7 @@ export function resetMemoryRepository(): void {
   state.team = new Map();
   state.battles = [];
   state.evolutions = [];
-  state.wallet = { address: null, nonce: null, nonceExpiresAt: null };
+  state.wallet = { address: null };
   state.onchainEvolutions = [];
   state.listings = [];
   state.worldSpawns = [];
@@ -128,6 +131,8 @@ export function resetMemoryRepository(): void {
   state.pickupClaims = [];
   state.dailySupplyAt = null;
   state.starterSupplyClaimed = false;
+  state.starterMonsterClaimed = false;
+  state.walletLoginChallenges = new Map();
   state.walletTestOwners = new Map();
   state.trainerTestWallets = new Map();
 }
@@ -202,6 +207,59 @@ function memoryRewardCtx(trainerId: string): RewardSettleContext {
 export const memoryRepository: GameRepository = {
   kind: "memory",
 
+  async getTrainerById(trainerId) {
+    return state.trainer?.id === trainerId ? state.trainer : null;
+  },
+
+  async upsertWalletPlayer(walletAddress: string): Promise<WalletPlayerResult> {
+    const wallet = getAddress(walletAddress).toLowerCase();
+    if (state.trainer) {
+      if (state.wallet.address !== wallet) {
+        throw new Error("Memory mode supports only one test identity.");
+      }
+      return { trainer: state.trainer, created: false };
+    }
+    state.wallet.address = wallet;
+    state.trainer = {
+      id: randomId(),
+      nickname: `Trainer-${wallet.slice(-8).toUpperCase() || "NEW"}`,
+      gold: 0,
+      wins: 0,
+      battleCount: 0,
+      captures: 0,
+    };
+    state.inventory.set(state.trainer.id, new Map());
+    return { trainer: state.trainer, created: true };
+  },
+
+  async createWalletLoginChallenge(challenge: WalletLoginChallenge) {
+    state.walletLoginChallenges.set(challenge.nonce, challenge);
+  },
+
+  async getWalletLoginChallenge(nonce: string) {
+    return state.walletLoginChallenges.get(nonce) ?? null;
+  },
+
+  async consumeWalletLoginChallenge(id: string, now: Date) {
+    const entry = [...state.walletLoginChallenges.values()].find(
+      (challenge) => challenge.id === id,
+    );
+    if (!entry || entry.expiresAt <= now) return false;
+    state.walletLoginChallenges.delete(entry.nonce);
+    return true;
+  },
+
+  async grantStarterMonster(trainerId) {
+    if (!state.trainer || state.trainer.id !== trainerId || state.starterMonsterClaimed) {
+      return false;
+    }
+    const starter = getSpeciesBySlug(STARTER_SPECIES_SLUGS[0]);
+    if (!starter) throw new Error("Starter species registry is unavailable.");
+    state.monsters.push(generateMonster(starter, { owner: trainerId }));
+    state.starterMonsterClaimed = true;
+    return true;
+  },
+
   async getDemoTrainer() {
     return state.trainer;
   },
@@ -226,19 +284,27 @@ export const memoryRepository: GameRepository = {
     return state.trainer;
   },
 
+  async bindWallet(_trainerId, walletAddress) {
+    const canonical = getAddress(walletAddress).toLowerCase();
+    state.wallet.address = canonical;
+    return canonical;
+  },
+
   async addMonster(monster) {
     state.monsters.push(monster);
   },
 
-  async listMonsters() {
-    // Collection = monsters of the current demo trainer (owner-filtered).
-    return state.trainer
-      ? state.monsters.filter((m) => m.owner === state.trainer?.id)
+  async listMonsters(trainerId?: string) {
+    const scopedTrainerId = trainerId ?? state.trainer?.id;
+    return scopedTrainerId
+      ? state.monsters.filter((monster) => monster.owner === scopedTrainerId)
       : [];
   },
 
-  async getMonster(id) {
-    return state.monsters.find((m) => m.id === id) ?? null;
+  async getMonster(id, trainerId?: string) {
+    return trainerId
+      ? state.monsters.find((monster) => monster.id === id && monster.owner === trainerId) ?? null
+      : state.monsters.find((monster) => monster.id === id) ?? null;
   },
 
   async getMonsterPublic(id) {
@@ -469,28 +535,6 @@ export const memoryRepository: GameRepository = {
       if (testWallet) return testWallet;
     }
     return state.wallet.address;
-  },
-
-  async setWalletChallenge(_trainerId, challenge) {
-    state.wallet.nonce = challenge.nonce;
-    state.wallet.nonceExpiresAt = challenge.expiresAt;
-  },
-
-  async getWalletChallenge() {
-    if (!state.wallet.nonce || !state.wallet.nonceExpiresAt) return null;
-    return { nonce: state.wallet.nonce, expiresAt: state.wallet.nonceExpiresAt };
-  },
-
-  async bindWallet(_trainerId, walletAddress) {
-    // Canonical representation: checksum-validated, stored lowercase.
-    const canonical = getAddress(walletAddress).toLowerCase();
-    if (state.wallet.address && state.wallet.address !== canonical) {
-      throw new Error("Wallet rebinding is not supported yet.");
-    }
-    state.wallet.address = canonical;
-    state.wallet.nonce = null;
-    state.wallet.nonceExpiresAt = null;
-    return canonical;
   },
 
   // ---------------- NFT mint state machine (Phase 7) ----------------
@@ -732,13 +776,14 @@ export const memoryRepository: GameRepository = {
 
   // ---------------- Pixel World ----------------
 
-  async getWorldSpawns(): Promise<WorldSpawnRecord[]> {
-    return [...state.worldSpawns];
+  async getWorldSpawns(worldMap?: string): Promise<WorldSpawnRecord[]> {
+    return state.worldSpawns.filter((spawn) => !worldMap || spawn.worldMap === worldMap);
   },
 
   async saveWorldSpawns(spawns: WorldSpawnRecord[], capacity = Number.POSITIVE_INFINITY): Promise<void> {
+    const worldMap = spawns[0]?.worldMap;
     for (const s of spawns) {
-      if (state.worldSpawns.length >= capacity) break;
+      if (worldMap && state.worldSpawns.filter((spawn) => spawn.worldMap === worldMap).length >= capacity) break;
       if (!state.worldSpawns.some((e) => e.id === s.id)) {
         state.worldSpawns.push(s);
       }

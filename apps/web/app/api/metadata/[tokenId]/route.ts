@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(
   _request: Request,
-  { params }: { params: { tokenId: string } },
+  { params }: { params: Promise<{ tokenId: string }> },
 ) {
-  const tokenId = params.tokenId;
+  const { tokenId } = await params;
   if (!/^\d+$/.test(tokenId)) {
     return NextResponse.json({ error: "Invalid token id." }, { status: 400 });
   }

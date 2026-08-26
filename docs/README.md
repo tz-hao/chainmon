@@ -18,7 +18,7 @@ Core loop: **Explore → Encounter → Capture → Collect → Team → 3v3 Batt
 
 ```
 chainmon/
-  apps/web          Next.js 14 (App Router) + TypeScript (strict) + Tailwind CSS
+  apps/web          Next.js 15 (App Router) + TypeScript (strict) + Tailwind CSS
   packages/game-engine   Pure game logic (battle / capture / damage / exp / evolution)
   packages/monster-data  Monster species catalogue (28 species, 48 skills including 8 Web3 / 32 Knowledge skills, regions)
   packages/shared        Shared domain types & constants

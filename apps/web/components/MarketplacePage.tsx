@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useAccount, useChainId, useWriteContract } from "wagmi";
+import {
+  useAccount,
+  useChainId,
+  useSwitchChain,
+  useWriteContract,
+} from "wagmi";
 import monsterMarketplaceAbi from "../../../contracts/abis/MonsterMarketplace.json";
 import {
   MONSTER_MARKETPLACE_ADDRESS,
@@ -43,7 +48,6 @@ interface ListingView {
 export type { ListingView };
 
 interface MarketplacePageProps {
-  trainerId: string | null;
   initialListings: ListingView[];
 }
 
@@ -61,12 +65,12 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function MarketplacePage({
-  trainerId,
   initialListings,
 }: MarketplacePageProps) {
   const router = useRouter();
   const chainId = useChainId();
   const { address, isConnected } = useAccount();
+  const { switchChain, isPending: isSwitchingNetwork } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
 
   const [tab, setTab] = useState<Tab>("for-sale");
@@ -75,14 +79,14 @@ export function MarketplacePage({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const targetChainId = Number(
-    process.env.NEXT_PUBLIC_CHAINMON_CHAIN_ID ?? 31337,
+    process.env.NEXT_PUBLIC_CHAINMON_CHAIN_ID ?? 10143,
   );
   const wrongNetwork = isConnected && chainId !== targetChainId;
 
   async function load() {
     try {
-      const url = tab === "mine" && trainerId
-        ? `/api/marketplace/listings?trainerId=${encodeURIComponent(trainerId)}`
+      const url = tab === "mine"
+        ? "/api/marketplace/listings?mine=1"
         : "/api/marketplace/listings";
       const res = await fetch(url);
       if (!res.ok) throw new Error("unavailable");
@@ -116,7 +120,6 @@ export function MarketplacePage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          trainerId,
           monsterId: listing.monsterId,
           txHash: tx,
           buyerWallet: address,
@@ -157,7 +160,6 @@ export function MarketplacePage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          trainerId,
           monsterId: listing.monsterId,
           txHash: tx,
         }),
@@ -212,9 +214,17 @@ export function MarketplacePage({
       </div>
 
       {wrongNetwork ? (
-        <p className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-          Wrong network — switch to chain {targetChainId} to trade.
-        </p>
+        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          <p>Marketplace 操作会发起链上交易，请先切换到 Monad Testnet。</p>
+          <button
+            type="button"
+            disabled={isSwitchingNetwork}
+            onClick={() => switchChain({ chainId: targetChainId })}
+            className="mt-2 rounded-md border border-red-400/40 px-2.5 py-1 font-semibold text-red-200 hover:bg-red-500/10 disabled:opacity-50"
+          >
+            {isSwitchingNetwork ? "切换中..." : "切换到 Monad Testnet"}
+          </button>
+        </div>
       ) : null}
       {error ? (
         <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">

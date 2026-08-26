@@ -4,7 +4,6 @@ import { getRequiredExp } from "@chainmon/game-engine";
 import { checkEvolutionEligibility } from "@chainmon/game-engine";
 import type { MonsterDNA } from "@chainmon/shared";
 import { getSpeciesById } from "@chainmon/monster-data";
-import { DemoModeNote } from "@/components/DemoModeNote";
 import { ElementBadge } from "@/components/ElementBadge";
 import { EvolutionPanel } from "@/components/EvolutionPanel";
 import { RarityBadge } from "@/components/RarityBadge";
@@ -12,7 +11,7 @@ import { SellPanel } from "@/components/SellPanel";
 import { Web3Panel } from "@/components/Web3Panel";
 import { KnowledgeCard } from "@/components/world/KnowledgeCard";
 import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
-import { getRepository } from "@/lib/data";
+import { requirePageTrainer } from "@/lib/auth/current-trainer";
 
 export const dynamic = "force-dynamic";
 
@@ -32,24 +31,22 @@ const STAT_ROWS = [
 ] as const;
 
 interface MonsterDetailPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function MonsterDetailPage({
   params,
 }: MonsterDetailPageProps) {
-  const repository = await getRepository();
-  const trainer = await repository.getDemoTrainer();
-  const monster =
-    (await repository.getMonster(params.id)) ??
-    (await repository.getMonsterPublic(params.id));
+  const { id } = await params;
+  const { repository, trainer } = await requirePageTrainer();
+  const monster = await repository.getMonster(id, trainer.id);
   if (!monster) {
     notFound();
   }
 
-  const isOwner = trainer !== null && monster.owner === trainer.id;
+  const isOwner = monster.owner === trainer.id;
   const species = getSpeciesById(monster.speciesId);
-  const inventory = trainer ? await repository.getInventory(trainer.id) : [];
+  const inventory = await repository.getInventory(trainer.id);
   const target = species?.evolution?.evolvesTo
     ? getSpeciesById(species.evolution.evolvesTo)
     : undefined;
@@ -328,11 +325,6 @@ export default async function MonsterDetailPage({
         )}
       </section>
 
-      {repository.kind === "memory" ? (
-        <div className="mt-6">
-          <DemoModeNote />
-        </div>
-      ) : null}
     </div>
   );
 }
