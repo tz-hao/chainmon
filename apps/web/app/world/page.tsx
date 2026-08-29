@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 export default async function WorldPage() {
   await requirePageTrainer();
   return (
-    <main className="h-screen w-screen overflow-hidden bg-slate-950">
+    <div className="h-screen w-screen overflow-hidden bg-slate-950">
       <PixelWorld />
-    </main>
+    </div>
   );
 }

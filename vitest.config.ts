@@ -16,6 +16,7 @@ export default defineConfig({
       "apps/web/lib/web3/**/*.test.ts",
       "apps/web/lib/services/**/*.test.ts",
       "apps/web/lib/world/**/*.test.ts",
+      "apps/web/lib/rift/**/*.test.ts",
     ],
     environment: "node",
     // threads pool avoids child-process forks (sandbox-friendly, faster for pure TS)

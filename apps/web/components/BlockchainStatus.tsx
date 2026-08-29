@@ -7,9 +7,10 @@ interface HealthState {
   chainId?: number;
   contractAddress?: string | null;
   contractVersion?: string;
-  backendAddress?: string;
-  minterRole?: boolean;
-  evolverRole?: boolean;
+  backendAddress?: string | null;
+  minterRole?: boolean | null;
+  evolverRole?: boolean | null;
+  backendWritesEnabled?: boolean;
   reason?: string;
 }
 
@@ -62,11 +63,17 @@ export function BlockchainStatus() {
               ? `${health.contractAddress.slice(0, 10)}...${health.contractAddress.slice(-6)}`
               : "—"}
           </p>
-          <p className="text-xs text-slate-500">
-            Backend: {health.backendAddress?.slice(0, 10)}... · MINTER{" "}
-            {health.minterRole ? "✅" : "❌"} · EVOLVER{" "}
-            {health.evolverRole ? "✅" : "❌"}
-          </p>
+          {health.backendWritesEnabled ? (
+            <p className="text-xs text-slate-500">
+              Backend: {health.backendAddress?.slice(0, 10)}... · MINTER{" "}
+              {health.minterRole ? "✅" : "❌"} · EVOLVER{" "}
+              {health.evolverRole ? "✅" : "❌"}
+            </p>
+          ) : (
+            <p className="text-xs text-slate-500">
+              Backend writes disabled in this environment.
+            </p>
+          )}
         </div>
       ) : (
         <p className="mt-2 text-sm text-amber-300/90">

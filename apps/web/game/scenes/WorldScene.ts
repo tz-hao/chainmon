@@ -50,6 +50,8 @@ interface WorldSceneData {
 interface WildMonsterSprite {
   spawnId: string;
   speciesId: number;
+  homeTileX: number;
+  homeTileY: number;
   sprite: Phaser.Physics.Arcade.Sprite;
   marker: Phaser.GameObjects.Text;
   state: "idle" | "walk";
@@ -267,6 +269,8 @@ export class WorldScene extends Phaser.Scene {
       this.monsters.push({
         spawnId: spawn.spawnId,
         speciesId: spawn.speciesId,
+        homeTileX: spawn.x,
+        homeTileY: spawn.y,
         sprite,
         marker,
         state: "idle",
@@ -348,35 +352,34 @@ export class WorldScene extends Phaser.Scene {
         m.idleTimer -= delta;
         m.sprite.setVelocity(0, 0);
         if (m.idleTimer <= 0) {
-          m.state = "walk";
-          m.walkTimer = 500 + Math.random() * 900;
-          const dirs = [
-            [1, 0],
-            [-1, 0],
-            [0, 1],
-            [0, -1],
-          ] as const;
-          const [dx2, dy2] = dirs[Math.floor(Math.random() * dirs.length)]!;
-          m.dirX = dx2;
-          m.dirY = dy2;
+          const direction = this.nextMonsterDirection(m);
+          if (direction) {
+            m.state = "walk";
+            m.walkTimer = 500 + Math.random() * 900;
+            [m.dirX, m.dirY] = direction;
+          } else {
+            m.idleTimer = 700 + Math.random() * 1500;
+          }
         }
       } else {
         m.walkTimer -= delta;
-        // try walk; if blocked, pick a new direction
+        // Spawns are server-authoritative. Keep the visual wander within one
+        // tile of the stored spawn so contact in Phaser also satisfies the
+        // server's interaction-distance check against that stored position.
         const tileX = Math.floor(m.sprite.x / WORLD_TILE_SIZE);
         const tileY = Math.floor(m.sprite.y / WORLD_TILE_SIZE);
         const nextTileX = tileX + m.dirX;
         const nextTileY = tileY + m.dirY;
-        if (!this.isWalkable(nextTileX, nextTileY)) {
-          const dirs = [
-            [1, 0],
-            [-1, 0],
-            [0, 1],
-            [0, -1],
-          ] as const;
-          const [dx2, dy2] = dirs[Math.floor(Math.random() * dirs.length)]!;
-          m.dirX = dx2;
-          m.dirY = dy2;
+        if (!this.canMonsterWalkTo(m, nextTileX, nextTileY)) {
+          const direction = this.nextMonsterDirection(m);
+          if (!direction) {
+            m.state = "idle";
+            m.idleTimer = 700 + Math.random() * 1500;
+            m.sprite.setVelocity(0, 0);
+            m.marker.setPosition(m.sprite.x, m.sprite.y - 26);
+            continue;
+          }
+          [m.dirX, m.dirY] = direction;
         }
         m.sprite.setVelocity(
           m.dirX * m.baseSpeed * MONSTER_OVERWORLD_SCALE,
@@ -391,6 +394,32 @@ export class WorldScene extends Phaser.Scene {
       m.marker.setPosition(m.sprite.x, m.sprite.y - 26);
       void time;
     }
+  }
+
+  private canMonsterWalkTo(
+    monster: WildMonsterSprite,
+    tileX: number,
+    tileY: number,
+  ): boolean {
+    return (
+      this.isWalkable(tileX, tileY) &&
+      Math.hypot(tileX - monster.homeTileX, tileY - monster.homeTileY) <= 1
+    );
+  }
+
+  private nextMonsterDirection(monster: WildMonsterSprite): readonly [number, number] | null {
+    const tileX = Math.floor(monster.sprite.x / WORLD_TILE_SIZE);
+    const tileY = Math.floor(monster.sprite.y / WORLD_TILE_SIZE);
+    const directions = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const;
+    const available = directions.filter(([dx, dy]) =>
+      this.canMonsterWalkTo(monster, tileX + dx, tileY + dy),
+    );
+    return available[Math.floor(Math.random() * available.length)] ?? null;
   }
 
   private updateInteraction(): void {

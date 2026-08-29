@@ -232,7 +232,7 @@ export function EncounterOverlay({ encounter, inventory, onClose, onCaptured }: 
         {message ? <p className="mt-3 text-center text-sm text-sky-300">{message}</p> : null}
         {error ? <p className="mt-3 text-center text-sm text-red-400">{error}</p> : null}
         <p className="mt-2 text-center text-[10px] text-slate-500">
-          Native marketplace currency: {NATIVE_CURRENCY_SYMBOL} · server-authoritative capture
+          Native marketplace currency: {NATIVE_CURRENCY_SYMBOL} · capture resolves safely
         </p>
       </div>
     </div>

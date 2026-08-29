@@ -40,7 +40,7 @@ export default async function BattleArenaPage({
     <div className="mx-auto max-w-3xl animate-fade-in-up">
       <PageHeader
         title="Battle Arena"
-        subtitle="Server-authoritative 3v3 battle — every action is resolved on the server."
+        subtitle="3v3 battle — resolve one clear command at a time."
         badge="Phase 4"
       />
       <Link

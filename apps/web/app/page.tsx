@@ -1,127 +1,92 @@
 import Link from "next/link";
 
-const GAME_LOOP = [
-  "Explore",
-  "Encounter",
-  "Capture",
-  "Collect",
-  "Team",
-  "Battle",
-  "Evolve",
-  "NFT",
-] as const;
+function FeatureIcon({ kind }: { kind: "creature" | "battle" | "chain" }) {
+  const common = {
+    className: "h-6 w-6",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.7,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+  if (kind === "creature") {
+    return <svg {...common}><path d="M5 9 3 4l6 2m10 3 2-5-6 2" /><path d="M5 9a7 7 0 1 0 14 0c0-2-2-3-4-3H9C7 6 5 7 5 9Z" /><path d="M9 12h.01M15 12h.01M9 16c2 1 4 1 6 0" /></svg>;
+  }
+  if (kind === "battle") {
+    return <svg {...common}><path d="m5 3 6 6-2 2-6-6V3h2Zm14 0-6 6 2 2 6-6V3h-2Z" /><path d="m8 12-5 5 4 4 5-5m4-4 5 5-4 4-5-5" /></svg>;
+  }
+  return <svg {...common}><path d="M9 7H7a5 5 0 0 0 0 10h2m6-10h2a5 5 0 0 1 0 10h-2M8 12h8" /></svg>;
+}
 
-const FEATURES = [
+const PILLARS = [
   {
-    icon: "🗺️",
-    title: "Explore",
-    text: "Four zones — Forest, Lake, Volcano and Power Plant — each with its own wild monster population.",
+    kind: "creature" as const,
+    title: "Protocol creatures",
+    text: "Build a persistent collection of 28 species with DNA, skills, levels, rarity and evolution.",
   },
   {
-    icon: "🥚",
-    title: "Capture",
-    text: "Encounter wild monsters and throw capture balls. Rarity, HP and ball grade decide your odds.",
+    kind: "battle" as const,
+    title: "Tactical expeditions",
+    text: "Navigate Rift nodes and resolve Attack, Skill, Defend and Switch commands one turn at a time.",
   },
   {
-    icon: "⚔️",
-    title: "3v3 Battle",
-    text: "Build a team of three and fight turn-based battles with element advantages.",
+    kind: "chain" as const,
+    title: "Ownership by choice",
+    text: "Progress off-chain, then choose if and when a monster becomes an on-chain Monad Testnet NFT.",
   },
-  {
-    icon: "⬆️",
-    title: "Evolve",
-    text: "Level up, learn skills and evolve your monsters through multi-stage evolution lines.",
-  },
-  {
-    icon: "⛓️",
-    title: "NFT Ownership",
-    text: "Monsters become ERC-721 NFTs on-chain with DNA, lineage and battle history.",
-  },
-] as const;
-
-const ONBOARDING = [
-  "连接你的 EVM 钱包",
-  "主动签署可读的登录消息",
-  "选择一张像素世界地图",
-  "捕捉、收集、组队与战斗",
 ] as const;
 
 export default function HomePage() {
   return (
-    <div className="animate-fade-in-up">
-      {/* Hero */}
-      <section className="bg-grid relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/60 px-6 py-20 text-center">
-        <div className="relative">
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">
-            Pixel RPG × Monster Collection × On-chain Ownership
+    <div className="space-y-6 animate-fade-in-up">
+      <section className="rift-panel relative overflow-hidden px-6 py-16 text-center sm:px-10 sm:py-24">
+        <div className="rift-map-grid absolute inset-0 opacity-45" aria-hidden="true" />
+        <div className="rift-aurora absolute left-1/2 top-0 h-96 w-96 -translate-x-1/2 -translate-y-1/3 rounded-full" aria-hidden="true" />
+        <div className="relative mx-auto max-w-4xl">
+          <p className="font-mono text-xs font-semibold uppercase tracking-[0.3em] text-emerald-300">
+            Monster collection × protocol expeditions
           </p>
-          <h1 className="mt-4 bg-gradient-to-r from-amber-300 via-orange-400 to-red-400 bg-clip-text text-5xl font-black tracking-tight text-transparent md:text-6xl">
+          <h1 className="mt-6 text-5xl font-black tracking-[-0.05em] text-white sm:text-7xl lg:text-8xl">
             ChainMon
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-slate-300">
-            从连接钱包开始你的个人冒险。探索四张像素世界，捕捉 ChainMon、训练队伍，并在你主动选择时体验链上所有权。
+          <p className="mx-auto mt-5 max-w-2xl text-lg font-medium text-slate-200 sm:text-xl">
+            Protocol Creatures. Tactical Battles. On-chain Ownership.
           </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/login"
-              className="rounded-xl bg-amber-500 px-6 py-3 font-semibold text-slate-950 transition-colors hover:bg-amber-400"
-            >
-              连接钱包
-            </Link>
-            <Link
-              href="/monsters"
-              className="rounded-xl border border-slate-700 bg-slate-800/60 px-6 py-3 font-semibold text-slate-200 transition-colors hover:bg-slate-800"
-            >
-              查看图鉴
-            </Link>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-7 text-slate-400 sm:text-base">
+            进入协议裂隙，部署你的怪物队伍，在战斗与 Web3 协议事件中做出选择，并把真实成长带回收藏。
+          </p>
+          <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
+            <Link href="/rift" className="rift-button-primary">Enter the Rift · 进入协议裂隙</Link>
+            <Link href="/monsters" className="rift-button-secondary">View creature registry</Link>
           </div>
+          <p className="mt-5 text-xs text-slate-500">Connect never auto-signs. Rift play never auto-mints.</p>
         </div>
       </section>
 
-      {/* Game loop */}
-      <section className="mt-12">
-        <h2 className="text-center text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
-          The Core Loop
-        </h2>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-          {GAME_LOOP.map((step, index) => (
-            <span key={step} className="flex items-center gap-2">
-              <span className="rounded-lg border border-slate-800 bg-slate-900 px-3 py-1.5 text-sm font-medium text-slate-200">
-                {step}
+      <section className="grid gap-4 md:grid-cols-3" aria-label="ChainMon product pillars">
+        {PILLARS.map((pillar, index) => (
+          <article key={pillar.title} className="rift-panel">
+            <div className="flex items-center justify-between">
+              <span className="grid h-11 w-11 place-items-center rounded-xl border border-cyan-300/20 bg-cyan-300/5 text-cyan-200">
+                <FeatureIcon kind={pillar.kind} />
               </span>
-              {index < GAME_LOOP.length - 1 ? (
-                <span className="text-slate-600">→</span>
-              ) : null}
-            </span>
-          ))}
-        </div>
+              <span className="font-mono text-xs text-slate-600">0{index + 1}</span>
+            </div>
+            <h2 className="mt-6 text-xl font-bold text-white">{pillar.title}</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-400">{pillar.text}</p>
+          </article>
+        ))}
       </section>
 
-      {/* Features */}
-      <section className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {FEATURES.map((feature) => (
-          <div
-            key={feature.title}
-            className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 transition-colors hover:border-slate-700"
-          >
-            <div className="text-3xl">{feature.icon}</div>
-            <h3 className="mt-3 font-semibold text-slate-100">{feature.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-400">{feature.text}</p>
-          </div>
-        ))}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          <h3 className="font-semibold text-slate-100">新玩家流程</h3>
-          <ul className="mt-3 space-y-1.5">
-            {ONBOARDING.map((step, index) => (
-              <li key={step} className="flex items-center gap-2 text-sm">
-                <span className="grid h-5 w-5 place-items-center rounded-full bg-emerald-500/20 text-[10px] font-bold text-emerald-400">
-                  {index + 1}
-                </span>
-                <span className="text-slate-300">{step}</span>
-              </li>
-            ))}
-          </ul>
+      <section className="rift-panel flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="rift-kicker">Pixel World route</p>
+          <h2 className="mt-3 text-2xl font-bold text-white">Explore the original regions</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Explore Forest, Lake, Volcano and Power Station through the original Phaser experience at any time.</p>
         </div>
+        <Link href="/world/select" className="rift-button-secondary shrink-0">Open Pixel World</Link>
       </section>
     </div>
   );

@@ -1,28 +1,109 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
+import {
+  useAccount,
+  useConnect,
+  useDisconnect,
+  useSignMessage,
+  useSwitchChain,
+} from "wagmi";
+import { chainmonChain } from "@/lib/web3/chain";
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+interface Eip1193Provider {
+  request(args: { method: string }): Promise<unknown>;
+  on?(event: "chainChanged", listener: (chainId: string) => void): void;
+  removeListener?(event: "chainChanged", listener: (chainId: string) => void): void;
+}
+
+function parseWalletChainId(value: unknown): number | null {
+  if (typeof value !== "string" || !/^0x[0-9a-f]+$/i.test(value)) return null;
+  const chainId = Number.parseInt(value, 16);
+  return Number.isSafeInteger(chainId) ? chainId : null;
+}
+
 /** Wallet-first login: connection is harmless; signing needs a second click. */
 export function WalletLoginPanel() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
+  const { address, connector: connectedConnector, isConnected } = useAccount();
   const { connect, connectors, isPending: connecting } = useConnect();
   const { disconnect } = useDisconnect();
+  const { switchChain, isPending: switchingChain } = useSwitchChain();
   const { signMessageAsync } = useSignMessage();
+  const [mounted, setMounted] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [signing, setSigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [walletChainId, setWalletChainId] = useState<number | null | undefined>(undefined);
 
   const connector = connectors[0];
+  const activeConnector =
+    connectedConnector && typeof connectedConnector.getProvider === "function"
+      ? connectedConnector
+      : connector;
+  const wrongNetwork = isConnected && typeof walletChainId === "number" && walletChainId !== chainmonChain.id;
+  const networkChecking = isConnected && walletChainId === undefined;
+  const networkUnavailable = isConnected && walletChainId === null;
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let provider: Eip1193Provider | undefined;
+    const readChainId = async () => {
+      try {
+        const chainId = parseWalletChainId(
+          await provider?.request({ method: "eth_chainId" }),
+        );
+        if (!cancelled) setWalletChainId(chainId);
+      } catch {
+        if (!cancelled) setWalletChainId(null);
+      }
+    };
+    const onChainChanged = () => void readChainId();
+
+    if (!isConnected || !activeConnector) {
+      setWalletChainId(undefined);
+      return;
+    }
+    void activeConnector.getProvider().then((candidate) => {
+      provider = candidate as Eip1193Provider;
+      provider.on?.("chainChanged", onChainChanged);
+      return readChainId();
+    }).catch(() => {
+      if (!cancelled) setWalletChainId(null);
+    });
+
+    return () => {
+      cancelled = true;
+      provider?.removeListener?.("chainChanged", onChainChanged);
+    };
+  }, [activeConnector, isConnected]);
 
   async function signIn() {
-    if (!address) return;
+    if (!address || !activeConnector) return;
+    try {
+      const provider = (await activeConnector.getProvider()) as Eip1193Provider;
+      const actualChainId = parseWalletChainId(
+        await provider.request({ method: "eth_chainId" }),
+      );
+      if (actualChainId !== chainmonChain.id) {
+        setError(`请先将钱包切换到 ${chainmonChain.name}（Chain ID ${chainmonChain.id}）。`);
+        setConfirming(false);
+        return;
+      }
+    } catch {
+      setError("无法确认当前钱包网络。请重新连接钱包后再试。");
+      setConfirming(false);
+      return;
+    }
     setSigning(true);
     setError(null);
     try {
@@ -65,7 +146,7 @@ export function WalletLoginPanel() {
         连接常用 EVM 钱包后，再由你主动签署标准登录消息。钱包地址就是你的 ChainMon 账号。
       </p>
 
-      {!isConnected || !address ? (
+      {!mounted || !isConnected || !address ? (
         <button
           type="button"
           disabled={!connector || connecting}
@@ -79,17 +160,28 @@ export function WalletLoginPanel() {
           <p className="text-xs font-semibold uppercase tracking-wide text-emerald-300">Wallet connected</p>
           <p className="mt-1 font-mono text-sm text-slate-100">{shortAddress(address)}</p>
           <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              disabled={signing}
-              onClick={() => {
-                setError(null);
-                setConfirming(true);
-              }}
-              className="flex-1 rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 hover:bg-amber-300 disabled:opacity-50"
-            >
-              登录 ChainMon
-            </button>
+            {wrongNetwork ? (
+              <button
+                type="button"
+                disabled={switchingChain}
+                onClick={() => switchChain({ chainId: chainmonChain.id })}
+                className="flex-1 rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 hover:bg-amber-300 disabled:opacity-50"
+              >
+                {switchingChain ? "正在切换网络…" : `切换到 ${chainmonChain.name}`}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={signing || networkChecking || networkUnavailable}
+                onClick={() => {
+                  setError(null);
+                  setConfirming(true);
+                }}
+                className="flex-1 rounded-lg bg-amber-400 px-4 py-2.5 text-sm font-extrabold text-slate-950 hover:bg-amber-300 disabled:opacity-50"
+              >
+                {networkChecking ? "正在验证钱包网络…" : "登录 ChainMon"}
+              </button>
+            )}
             <button
               type="button"
               disabled={signing}
@@ -99,6 +191,16 @@ export function WalletLoginPanel() {
               断开
             </button>
           </div>
+          {wrongNetwork ? (
+            <p role="alert" className="mt-3 text-xs leading-5 text-amber-200">
+              当前钱包网络不是 {chainmonChain.name}（Chain ID {chainmonChain.id}）。ChainMon 不会在错误网络上发起登录签名。
+            </p>
+          ) : null}
+          {networkUnavailable ? (
+            <p role="alert" className="mt-3 text-xs leading-5 text-amber-200">
+              无法确认当前钱包网络；为保护登录签名，请重新连接钱包后再试。
+            </p>
+          ) : null}
         </div>
       )}
 

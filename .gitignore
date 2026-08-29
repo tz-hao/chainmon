@@ -24,3 +24,6 @@ coverage/
 Thumbs.db
 .idea/
 .vscode/
+
+# Vercel local project metadata
+.vercel/

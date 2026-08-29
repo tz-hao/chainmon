@@ -757,8 +757,12 @@ export const prismaRepository: GameRepository = {
             skills: { create: links },
           },
         });
+        await tx.trainer.update({
+          where: { id: trainerId },
+          data: { captures: { increment: 1 } },
+        });
         return "captured" as const;
-      });
+      }, { maxWait: 5_000, timeout: 20_000 });
     } catch (error) {
       if (error instanceof CaptureRaceLost) return "encounter-invalid";
       throw error;
@@ -903,7 +907,7 @@ export const prismaRepository: GameRepository = {
         logs: result.logs,
         rewards,
       } as const;
-    });
+    }, { maxWait: 5_000, timeout: 20_000 });
   },
 
   async commitEvolution(

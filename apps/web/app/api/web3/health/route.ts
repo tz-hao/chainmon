@@ -4,7 +4,7 @@ import {
   MONSTER_MARKETPLACE_ADDRESS,
   MONSTER_NFT_ADDRESS,
 } from "@/lib/web3/chain";
-import { getChainGateway } from "@/lib/web3";
+import { getReadOnlyChainHealth } from "@/lib/web3/read-only-health";
 
 export const dynamic = "force-dynamic";
 
@@ -13,33 +13,25 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
-    const gateway = getChainGateway();
-    const [version, minter, evolver, mpVersion, mpPaused, mpNft, rpcChainId] =
-      await Promise.all([
-        gateway.getContractVersion(),
-        gateway.hasRole("MINTER", gateway.backendAddress),
-        gateway.hasRole("EVOLVER", gateway.backendAddress),
-        gateway.getMarketplaceVersion(),
-        gateway.isMarketplacePaused(),
-        gateway.getMarketplaceMonsterNFT(),
-        gateway.getRpcChainId(),
-      ]);
+    const health = await getReadOnlyChainHealth();
     const marketplaceMisconfigured =
-      mpNft.toLowerCase() !== gateway.contractAddress.toLowerCase();
-    const chainMisconfigured = rpcChainId !== gateway.chainId;
+      health.marketplaceMonsterNFT.toLowerCase() !==
+      health.contractAddress.toLowerCase();
+    const chainMisconfigured = health.rpcChainId !== health.chainId;
     return NextResponse.json({
       connected: true,
-      chainId: gateway.chainId,
-      rpcChainId,
+      chainId: health.chainId,
+      rpcChainId: health.rpcChainId,
       chainMisconfigured,
-      contractAddress: gateway.contractAddress,
-      contractVersion: version,
-      backendAddress: gateway.backendAddress,
-      minterRole: minter,
-      evolverRole: evolver,
-      marketplaceAddress: gateway.marketplaceAddress,
-      marketplaceVersion: mpVersion,
-      marketplacePaused: mpPaused,
+      contractAddress: health.contractAddress,
+      contractVersion: health.contractVersion,
+      backendAddress: health.backendAddress,
+      minterRole: health.minterRole,
+      evolverRole: health.evolverRole,
+      backendWritesEnabled: health.backendAddress !== null,
+      marketplaceAddress: health.marketplaceAddress,
+      marketplaceVersion: health.marketplaceVersion,
+      marketplacePaused: health.marketplacePaused,
       marketplaceMisconfigured,
     });
   } catch {

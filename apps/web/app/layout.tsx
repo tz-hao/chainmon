@@ -5,9 +5,9 @@ import { AppShell } from "@/components/AppShell";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "ChainMon — Web3 Monster Collecting Game",
+  title: "ChainMon — Protocol Creatures & Tactical Rifts",
   description:
-    "Explore, capture, train and battle monsters. A Pokemon-like Web3 monster collecting game.",
+    "Collect protocol creatures, navigate tactical Rift expeditions and choose when to take ownership on-chain.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

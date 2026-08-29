@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "cd apps/web && next dev",
-    "build": "cd apps/web && next build",
+    "build": "prisma generate && cd apps/web && next build",
     "start": "cd apps/web && next start",
     "lint": "cd apps/web && next lint",
     "typecheck": "cd apps/web && tsc --noEmit",

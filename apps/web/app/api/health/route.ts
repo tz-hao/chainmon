@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getChainGateway } from "@/lib/web3";
+import { getReadOnlyChainHealth } from "@/lib/web3/read-only-health";
 import {
   CHAINMON_CHAIN_ID,
   MONSTER_MARKETPLACE_ADDRESS,
@@ -32,34 +32,26 @@ export async function GET() {
   // --- RPC / contracts ---
   let web3: Record<string, unknown> = { status: "unavailable" };
   try {
-    const gateway = getChainGateway();
-    const [version, mpVersion, mpPaused, mpNft, minter, evolver] =
-      await Promise.all([
-        gateway.getContractVersion(),
-        gateway.getMarketplaceVersion(),
-        gateway.isMarketplacePaused(),
-        gateway.getMarketplaceMonsterNFT(),
-        gateway.hasRole("MINTER", gateway.backendAddress),
-        gateway.hasRole("EVOLVER", gateway.backendAddress),
-      ]);
+    const health = await getReadOnlyChainHealth();
     web3 = {
       status: "ok",
-      chainId: gateway.chainId,
+      chainId: health.chainId,
       rpc: "ok",
       monsterNFT: {
-        address: gateway.contractAddress,
-        version,
+        address: health.contractAddress,
+        version: health.contractVersion,
       },
       marketplace: {
-        address: gateway.marketplaceAddress,
-        version: mpVersion,
-        paused: mpPaused,
-        monsterNFT: mpNft,
+        address: health.marketplaceAddress,
+        version: health.marketplaceVersion,
+        paused: health.marketplacePaused,
+        monsterNFT: health.marketplaceMonsterNFT,
       },
       backend: {
-        address: gateway.backendAddress,
-        minterRole: minter,
-        evolverRole: evolver,
+        writesEnabled: health.backendAddress !== null,
+        address: health.backendAddress,
+        minterRole: health.minterRole,
+        evolverRole: health.evolverRole,
       },
     };
   } catch {
