@@ -35,7 +35,8 @@ export function AccountHeader() {
   }, [pathname]);
 
   async function signOut() {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+    const response = await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+    if (!response.ok) return;
     window.dispatchEvent(new Event("chainmon-session-cleared"));
     disconnect();
     router.replace("/login");

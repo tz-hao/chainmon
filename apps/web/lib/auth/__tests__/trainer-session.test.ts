@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { NextResponse } from "next/server";
 import {
+  clearTrainerSessionCookie,
   createTrainerSessionToken,
   readTrainerSessionToken,
   resolveTrainerSession,
@@ -15,6 +17,19 @@ const WALLET_A = "0x00000000000000000000000000000000000000a1";
 const WALLET_B = "0x00000000000000000000000000000000000000b2";
 
 describe("trainer wallet session token", () => {
+  it("expires the HttpOnly session cookie immediately on logout", () => {
+    const response = NextResponse.json({ ok: true });
+    clearTrainerSessionCookie(response);
+
+    const cookie = response.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("chainmon_trainer_session=");
+    expect(cookie).toContain("Max-Age=0");
+    expect(cookie).toContain("Expires=");
+    expect(cookie).toContain("HttpOnly");
+    expect(cookie).toContain("Path=/");
+    expect(cookie).toContain("SameSite=lax");
+  });
+
   it("binds the signed session to one wallet identity and trainer", () => {
     const token = createTrainerSessionToken(WALLET_A, "trainer-a", 1_000);
     expect(readTrainerSessionToken(token, 1_001)).toMatchObject({

@@ -15,7 +15,8 @@ export function AccountActions() {
     setSigningOut(true);
     setError(null);
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+      const response = await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+      if (!response.ok) throw new Error("Logout failed.");
       window.dispatchEvent(new Event("chainmon-session-cleared"));
       disconnect();
       router.replace("/login");

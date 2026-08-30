@@ -93,6 +93,7 @@ export function clearTrainerSessionCookie(response: NextResponse): void {
     sameSite: "lax",
     path: "/",
     maxAge: 0,
+    expires: new Date(0),
   });
 }
 
