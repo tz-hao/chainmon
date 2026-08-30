@@ -128,7 +128,7 @@ export function WalletLoginPanel() {
       if (!verifyResponse.ok || !result.ok) {
         throw new Error(result.error ?? "Wallet login failed.");
       }
-      router.replace("/world/select");
+      router.replace("/rift");
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Wallet login failed.");
