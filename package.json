@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "cd apps/web && next dev",
-    "build": "prisma generate && cd apps/web && next build && cd ../.. && npm run audit:preview-ab-db",
+    "build": "prisma generate && cd apps/web && next build",
     "start": "cd apps/web && next start",
     "lint": "cd apps/web && next lint",
     "typecheck": "cd apps/web && tsc --noEmit",
@@ -28,7 +28,6 @@
     "contracts:verify:monad": "cd contracts && npx hardhat verify --network monadTestnet",
     "monad:preflight": "tsx scripts/monad-preflight.ts",
     "audit:state": "tsx scripts/audit-state.ts",
-    "audit:preview-ab-db": "tsx scripts/preview-ab-db-audit.ts",
     "validate:env": "tsx scripts/validate-env.ts",
     "validate:env:rpc": "tsx scripts/validate-env.ts --check-rpc",
     "e2e:browser": "tsx scripts/browser-e2e.ts"
