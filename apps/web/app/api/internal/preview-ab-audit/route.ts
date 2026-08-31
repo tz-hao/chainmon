@@ -6,9 +6,24 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
+const LOCAL_AUDIT_ORIGIN = "http://127.0.0.1:38763";
 
 function unavailable() {
   return new NextResponse(null, { status: 404, headers: NO_STORE_HEADERS });
+}
+
+function isLocalAuditOrigin(request: NextRequest) {
+  return request.headers.get("origin") === LOCAL_AUDIT_ORIGIN;
+}
+
+function responseHeaders(request: NextRequest) {
+  if (!isLocalAuditOrigin(request)) return NO_STORE_HEADERS;
+
+  return {
+    ...NO_STORE_HEADERS,
+    "Access-Control-Allow-Origin": LOCAL_AUDIT_ORIGIN,
+    Vary: "Origin",
+  };
 }
 
 function hasValidAuditToken(request: NextRequest): boolean {
@@ -170,12 +185,28 @@ export async function GET(request: NextRequest) {
         orphanBattleRecords,
         isolation: isolationPassed ? "pass" : "fail",
       },
-      { headers: NO_STORE_HEADERS },
+      { headers: responseHeaders(request) },
     );
   } catch {
     return NextResponse.json(
       { error: "Preview audit temporarily unavailable." },
-      { status: 503, headers: NO_STORE_HEADERS },
+      { status: 503, headers: responseHeaders(request) },
     );
   }
+}
+
+export function OPTIONS(request: NextRequest) {
+  if (process.env.VERCEL_ENV !== "preview" || !isLocalAuditOrigin(request)) {
+    return unavailable();
+  }
+
+  return new NextResponse(null, {
+    status: 204,
+    headers: {
+      ...responseHeaders(request),
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Authorization",
+      "Access-Control-Max-Age": "60",
+    },
+  });
 }
