@@ -22,6 +22,7 @@ function responseHeaders(request: NextRequest) {
   return {
     ...NO_STORE_HEADERS,
     "Access-Control-Allow-Origin": LOCAL_AUDIT_ORIGIN,
+    "Access-Control-Allow-Credentials": "true",
     Vary: "Origin",
   };
 }
