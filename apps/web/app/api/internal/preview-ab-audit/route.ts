@@ -23,7 +23,7 @@ function hasValidAuditToken(request: NextRequest): boolean {
 
 /**
  * Temporary, Preview-only A/B isolation audit. All reads are hard-coded and
- * the route is removed immediately after its aggregate result is verified.
+ * the route is removed immediately after its authenticated aggregate is verified.
  * Its response intentionally contains no ids, wallets, tokens, or secrets.
  */
 export async function GET(request: NextRequest) {
