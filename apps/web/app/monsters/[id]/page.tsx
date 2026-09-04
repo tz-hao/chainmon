@@ -6,11 +6,11 @@ import type { MonsterDNA } from "@chainmon/shared";
 import { getSpeciesById } from "@chainmon/monster-data";
 import { ElementBadge } from "@/components/ElementBadge";
 import { EvolutionPanel } from "@/components/EvolutionPanel";
+import { PixelMonster } from "@/components/PixelMonster";
 import { RarityBadge } from "@/components/RarityBadge";
 import { SellPanel } from "@/components/SellPanel";
 import { Web3Panel } from "@/components/Web3Panel";
 import { KnowledgeCard } from "@/components/world/KnowledgeCard";
-import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
 import { requirePageTrainer } from "@/lib/auth/current-trainer";
 
 export const dynamic = "force-dynamic";
@@ -76,15 +76,13 @@ export default async function MonsterDetailPage({
       <div className="mt-4 grid gap-6 lg:grid-cols-3">
         {/* Identity card */}
         <section className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 lg:col-span-1">
-          {/* Pixel World upgrade: ≥192×192 portrait via the visual manifest */}
-          <div className="flex h-52 w-52 items-center justify-center rounded-2xl bg-slate-950/40">
-            <img
-              src={getMonsterVisualPath(monster.speciesId, "portrait")}
+          <div className="flex h-64 w-64 items-center justify-center bg-slate-950/80">
+            <PixelMonster
+              speciesId={monster.speciesId}
+              variant="portrait"
+              scale={2}
               alt={monster.name}
-              width={192}
-              height={192}
-              className="h-48 w-48 object-contain"
-              style={{ imageRendering: "pixelated" }}
+              priority
             />
           </div>
           <h1 className="mt-4 text-2xl font-bold text-slate-100">

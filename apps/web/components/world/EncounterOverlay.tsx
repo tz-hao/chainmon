@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
-import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
 import type { WorldStateResponse } from "@/lib/world/world-types";
 import { getSpeciesById } from "@chainmon/monster-data";
+import { PixelMonster } from "@/components/PixelMonster";
+import { RiftIcon } from "@/components/rift/RiftIcon";
 import { NATIVE_CURRENCY_SYMBOL } from "@/lib/web3/chain";
 
 export interface EncounterData {
@@ -142,14 +142,13 @@ export function EncounterOverlay({ encounter, inventory, onClose, onCaptured }: 
 
         {/* Large monster sprite */}
         <div className="mt-4 flex justify-center">
-          <div className="relative flex h-48 w-48 items-center justify-center rounded-xl bg-slate-800/60">
+          <div className="relative flex h-64 w-64 items-center justify-center bg-slate-950/80">
             {species ? (
-              <Image
-                src={getMonsterVisualPath(encounter.speciesId, "portrait")}
+              <PixelMonster
+                speciesId={encounter.speciesId}
+                variant="portrait"
+                scale={2}
                 alt={encounter.speciesName}
-                width={160}
-                height={160}
-                unoptimized
                 className={throwState.phase === "shaking" ? "animate-pulse" : ""}
               />
             ) : (
@@ -190,6 +189,13 @@ export function EncounterOverlay({ encounter, inventory, onClose, onCaptured }: 
                   : "border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-500"
               } disabled:opacity-50`}
             >
+              <span className={`mx-auto mb-1 grid h-6 w-6 place-items-center border ${
+                slug === "basic-ball"
+                  ? "border-red-300/50 bg-red-300/10 text-red-200"
+                  : slug === "great-ball"
+                    ? "border-cyan-300/50 bg-cyan-300/10 text-cyan-200"
+                    : "border-violet-300/50 bg-violet-300/10 text-violet-200"
+              }`}><RiftIcon type="capsule" className="h-3.5 w-3.5" /></span>
               {ballLabels[slug]} ×{ballCount(slug)}
             </button>
           ))}

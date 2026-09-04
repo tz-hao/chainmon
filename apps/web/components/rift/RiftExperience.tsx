@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TrainerProfile } from "@chainmon/shared";
-import { getSpeciesById } from "@chainmon/monster-data";
 import type { BattleRewardSettlement, InventoryEntry } from "@/lib/data";
 import { RIFT_CATALOGUE, getRiftConfig, getRiftEvent } from "@/lib/rift/config";
 import { generateRiftRoute } from "@/lib/rift/generator";
@@ -24,10 +22,10 @@ import type {
   RiftMonsterView,
   RiftRunState,
 } from "@/lib/rift/types";
+import { PixelMonster } from "../PixelMonster";
 import { RiftBattlePanel } from "./RiftBattlePanel";
 import { RiftCapturePanel } from "./RiftCapturePanel";
 import { RiftEventPanel } from "./RiftEventPanel";
-import { RiftIcon } from "./RiftIcon";
 import { RiftMapBoard } from "./RiftMapBoard";
 import { RiftRestPanel } from "./RiftRestPanel";
 import { RiftSummary } from "./RiftSummary";
@@ -39,15 +37,43 @@ interface RiftExperienceProps {
   trainer: TrainerProfile;
   monsters: RiftMonsterView[];
   inventory: InventoryEntry[];
-  portraits: Record<number, string>;
   initialTeamIds: string[];
 }
 
+const RIFT_THEME: Record<RiftId, { border: string; accent: string; label: string; button: string }> = {
+  "liquidity-grove": {
+    border: "border-emerald-400/55",
+    accent: "text-emerald-200",
+    label: "text-emerald-300",
+    button: "border-emerald-300/70 text-emerald-100 hover:bg-emerald-300 hover:text-slate-950",
+  },
+  "proof-network": {
+    border: "border-sky-400/55",
+    accent: "text-sky-200",
+    label: "text-sky-300",
+    button: "border-sky-300/70 text-sky-100 hover:bg-sky-300 hover:text-slate-950",
+  },
+  "gas-wasteland": {
+    border: "border-amber-400/55",
+    accent: "text-amber-200",
+    label: "text-amber-300",
+    button: "border-amber-300/70 text-amber-100 hover:bg-amber-300 hover:text-slate-950",
+  },
+  "credit-abyss": {
+    border: "border-violet-400/55",
+    accent: "text-violet-200",
+    label: "text-violet-300",
+    button: "border-violet-300/70 text-violet-100 hover:bg-violet-300 hover:text-slate-950",
+  },
+};
+
+const ROUTE_TYPES = ["Signal", "Battle", "Capture", "Signal", "Rest", "Battle", "Elite", "Boss"] as const;
+
 function ProtocolMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3">
-      <p className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1 font-mono text-lg font-bold text-slate-100">+{value}</p>
+    <div className="border border-slate-700 bg-[#07101f] px-4 py-3">
+      <p className="font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-1 font-mono text-lg font-black text-amber-200">+{value}</p>
     </div>
   );
 }
@@ -56,6 +82,45 @@ function modifierTotal(run: RiftRunState, axis: ActiveRiftModifier["axis"]): num
   return run.modifiers
     .filter((modifier) => modifier.axis === axis)
     .reduce((total, modifier) => total + modifier.amount, 0);
+}
+
+function routeSlots(riftId: RiftId) {
+  const route = getRiftConfig(riftId).route;
+  return [
+    route.openingEvent,
+    route.openingBattle,
+    route.capture,
+    route.convergenceEvent,
+    route.rest,
+    route.standardBattle,
+    route.elite,
+    route.boss,
+  ];
+}
+
+function RoutePreview({ riftId }: { riftId: RiftId }) {
+  const rift = getRiftConfig(riftId);
+  const theme = RIFT_THEME[riftId];
+  return (
+    <section className={`border ${theme.border} bg-[#07101f]`} aria-labelledby="rift-route-preview-title">
+      <div className="flex flex-col gap-2 border-b border-slate-800 px-4 py-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className={`font-mono text-[9px] font-black uppercase tracking-[0.18em] ${theme.label}`}>Route signal</p>
+          <h2 id="rift-route-preview-title" className="mt-1 font-mono text-base font-black uppercase tracking-[0.06em] text-slate-100">{rift.name} · eight-step route</h2>
+        </div>
+        <p className="font-mono text-[9px] uppercase tracking-[0.12em] text-slate-500">One split → one convergence → final boss</p>
+      </div>
+      <ol className="grid grid-cols-4 divide-x divide-y divide-slate-800 sm:grid-cols-8 sm:divide-y-0" aria-label={`${rift.name} route preview`}>
+        {routeSlots(riftId).map((slot, index) => (
+          <li key={slot.id} className="min-w-0 bg-[#050b17] px-2 py-3">
+            <p className={`font-mono text-[9px] font-black ${theme.accent}`}>{String(index + 1).padStart(2, "0")}</p>
+            <p className="mt-1 truncate font-mono text-[9px] font-bold uppercase tracking-[0.08em] text-slate-200">{ROUTE_TYPES[index]}</p>
+            <p className="mt-1 truncate text-[10px] text-slate-500">{slot.title}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
 }
 
 function RiftCard({
@@ -70,37 +135,46 @@ function RiftCard({
   onChoose: () => void;
 }) {
   const rift = getRiftConfig(riftId);
-  const featured = rift.featuredSpeciesIds
-    .map((speciesId) => getSpeciesById(speciesId)?.name)
-    .filter((name): name is string => Boolean(name));
+  const theme = RIFT_THEME[riftId];
   return (
     <article
-      className="rift-selection-card flex min-h-72 flex-col rounded-2xl border p-5 sm:p-6"
+      className={`flex min-h-[18rem] flex-col border bg-[#07101f] p-4 transition-colors ${theme.border} ${selected ? "bg-slate-900" : "hover:bg-slate-900/75"}`}
       data-rift={rift.id}
       data-selected={selected || undefined}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-slate-400">{rift.ordinal}</p>
-          <h2 className="mt-2 text-2xl font-bold text-white">{rift.name}</h2>
-          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-cyan-100/70">{rift.eyebrow}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className={`font-mono text-[9px] font-black uppercase tracking-[0.18em] ${theme.label}`}>{rift.ordinal} · BIOME</p>
+          <h2 className="mt-2 font-mono text-xl font-black uppercase tracking-[0.03em] text-slate-100">{rift.name}</h2>
+          <p className="mt-1 font-mono text-[9px] font-bold uppercase tracking-[0.1em] text-slate-500">{rift.eyebrow}</p>
         </div>
-        <span className="rift-selection-emblem grid h-10 w-10 place-items-center rounded-xl"><RiftIcon type="rift" className="h-5 w-5" /></span>
+        <span className="shrink-0 border border-slate-700 bg-[#050b17] px-2 py-1 font-mono text-[9px] font-black text-slate-300">8 NODES</span>
       </div>
-      <p className="mt-5 text-sm leading-6 text-slate-400">{rift.description}</p>
-      <div className="mt-5 flex flex-wrap gap-1.5">
-        {rift.concepts.map((concept) => <span key={concept} className="rift-concept-tag">{concept}</span>)}
-      </div>
-      <dl className="mt-6 grid grid-cols-2 gap-3 border-t border-slate-800/80 pt-4 sm:grid-cols-4">
-        {[["Difficulty", rift.difficulty], ["Recommended", rift.recommendedLevel], ["Route", rift.runDuration], ["Boss", rift.bossTitle]].map(([label, value]) => (
-          <div key={label} className="min-w-0">
-            <dt className="text-[9px] uppercase tracking-[0.15em] text-slate-600">{label}</dt>
-            <dd className={`mt-1 font-mono text-[10px] font-semibold text-slate-300 ${label === "Boss" ? "leading-4" : "truncate"}`}>{value}</dd>
-          </div>
+
+      <div className="mt-4 flex min-h-16 items-center border-y border-slate-800 bg-[#050b17] px-2" aria-label={`${rift.name} featured creatures`}>
+        {rift.featuredSpeciesIds.map((speciesId) => (
+          <PixelMonster
+            key={speciesId}
+            speciesId={speciesId}
+            variant="battle-front"
+            alt={`${rift.name} featured creature`}
+            className="h-16 w-16"
+          />
         ))}
-      </dl>
-      <p className="mt-4 text-[10px] uppercase tracking-[0.14em] text-slate-500">Featured · <span className="normal-case tracking-normal text-slate-300">{featured.join(" · ")}</span></p>
-      <button type="button" onClick={onChoose} className="rift-button-secondary mt-6 w-full">
+        <p className="ml-auto max-w-[7.5rem] text-right font-mono text-[9px] uppercase tracking-[0.08em] text-slate-500">featured creatures</p>
+      </div>
+
+      <p className="mt-4 text-xs leading-5 text-slate-400">{rift.description}</p>
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-800 pt-3 font-mono text-[9px] uppercase tracking-[0.1em]">
+        <span className="text-slate-500">{rift.difficulty}</span>
+        <span className={theme.accent}>{rift.recommendedLevel}</span>
+        <span className="truncate text-slate-500">{rift.bossTitle}</span>
+      </div>
+      <button
+        type="button"
+        onClick={onChoose}
+        className={`mt-auto border bg-[#050b17] px-3 py-3 font-mono text-[10px] font-black uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${theme.button}`}
+      >
         {actionLabel}
       </button>
     </article>
@@ -118,41 +192,29 @@ function Hub({
   activeRun: RiftRunState | null;
   onEnter: (riftId: RiftId) => void;
 }) {
-  const activeRift = activeRun ? getRiftConfig(activeRun.riftId) : null;
+  const previewRiftId = activeRun?.riftId ?? "liquidity-grove";
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      <section className="rift-panel rift-stage px-6 py-10 sm:px-10 sm:py-14">
-        <div className="rift-hero-orbit hidden sm:block" aria-hidden="true" />
-        <div className="max-w-3xl">
-          <div className="rift-kicker"><RiftIcon type="rift" className="h-4 w-4" /> Protocol expedition layer</div>
-          <p className="mt-6 font-mono text-xs uppercase tracking-[0.24em] text-cyan-100/60">Four connected protocol environments</p>
-          <h1 className="mt-3 text-5xl font-black tracking-[-0.05em] text-white sm:text-6xl lg:text-7xl">
-            Enter the <span className="bg-gradient-to-r from-emerald-100 via-cyan-200 to-violet-200 bg-clip-text text-transparent">Protocol Rift</span>
-          </h1>
-          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-300 sm:text-lg">
-            Form a field squad, read each protocol environment and bring permanent collection progress back from a temporary route.
-          </p>
-          <div className="mt-7 flex flex-wrap gap-3">
-            {activeRun ? (
-              <button type="button" onClick={() => onEnter(activeRun.riftId)} className="rift-button-primary">Resume {activeRift?.name}</button>
-            ) : (
-              <button type="button" onClick={() => onEnter("liquidity-grove")} className="rift-button-primary">Assemble a team</button>
-            )}
-            <Link href="/monsters" className="rift-button-secondary text-center">Inspect collection</Link>
+    <div className="space-y-5 animate-fade-in-up">
+      <section className="border-2 border-slate-700 bg-[#07101f]" aria-labelledby="rift-hub-title">
+        <div className="flex flex-col gap-4 border-b border-slate-800 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-5">
+          <div>
+            <p className="font-mono text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">Protocol Rift // anomaly map</p>
+            <h1 id="rift-hub-title" className="mt-1 font-mono text-2xl font-black uppercase tracking-[0.04em] text-slate-100 sm:text-3xl">Choose a biome. Run the route.</h1>
           </div>
-          <p className="mt-5 max-w-xl text-xs leading-5 text-slate-500">Rift play never requests a wallet signature, transaction, token approval or NFT mint.</p>
+          <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-slate-500">{trainer.nickname} · {monsters.length} creatures ready</p>
         </div>
+        <p className="px-4 py-3 text-xs leading-5 text-slate-400 sm:px-5">Each biome is a compact eight-step expedition. Build a field team, stabilize the active route, then return rewards to the collection.</p>
       </section>
 
       <section aria-labelledby="rift-directory-title">
-        <div className="mb-4 flex items-end justify-between gap-4">
+        <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <p className="rift-kicker text-slate-400">Rift directory</p>
-            <h2 id="rift-directory-title" className="mt-2 text-2xl font-bold text-white">Four routes, one tactical loop</h2>
+            <p className="font-mono text-[9px] font-black uppercase tracking-[0.18em] text-slate-500">Rift directory</p>
+            <h2 id="rift-directory-title" className="mt-1 font-mono text-lg font-black uppercase text-slate-100">Four playable biomes</h2>
           </div>
-          <p className="hidden text-xs text-slate-500 sm:block">Each route has eight nodes and its own protocol decisions.</p>
+          <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-slate-500">Choose one route</p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2">
           {RIFT_CATALOGUE.map((rift) => (
             <RiftCard
               key={rift.id}
@@ -165,38 +227,12 @@ function Hub({
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rift-dossier p-5 sm:p-6">
-          <p className="rift-kicker text-slate-400">Rift promise</p>
-          <h2 className="mt-3 text-2xl font-bold text-white">A compact tactical loop, not a dashboard.</h2>
-          <div className="mt-6 grid gap-5 border-t border-slate-800/80 pt-5 sm:grid-cols-3">
-            {[["01", "Choose a route", "Each environment has a clear protocol identity."], ["02", "Read the pressure", "Events grant temporary signal, guard or tempo."], ["03", "Stabilize the core", "Battles and captures update your collection safely."]].map(([index, title, copy]) => (
-              <div key={index}>
-                <p className="font-mono text-xs text-cyan-200">{index}</p>
-                <h3 className="mt-2 text-sm font-semibold text-slate-100">{title}</h3>
-                <p className="mt-2 text-sm leading-5 text-slate-500">{copy}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-        <aside className="rift-dossier p-5 sm:p-6">
-          <p className="rift-kicker text-slate-400">Field dossier</p>
-          <div className="mt-5 flex items-end justify-between gap-4 border-b border-slate-800/80 pb-4">
-            <div><p className="text-lg font-bold text-white">{trainer.nickname}</p><p className="mt-1 text-xs text-slate-500">Trainer profile</p></div>
-            <RiftIcon type="team" className="h-7 w-7 text-cyan-200/75" />
-          </div>
-          <dl className="mt-4 grid grid-cols-2 gap-x-5 gap-y-4">
-            {[["Collection", monsters.length], ["Captures", trainer.captures], ["Victories", trainer.wins], ["Gold", trainer.gold]].map(([label, value]) => (
-              <div key={label}><dt className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{label}</dt><dd className="rift-dossier-value mt-1 font-mono text-xl font-bold text-slate-100">{value}</dd></div>
-            ))}
-          </dl>
-        </aside>
-      </section>
+      <RoutePreview riftId={previewRiftId} />
     </div>
   );
 }
 
-export function RiftExperience({ trainer, monsters, inventory, portraits, initialTeamIds }: RiftExperienceProps) {
+export function RiftExperience({ trainer, monsters, inventory, initialTeamIds }: RiftExperienceProps) {
   const router = useRouter();
   const [availableMonsters, setAvailableMonsters] = useState(monsters);
   const [view, setView] = useState<RiftView>("hub");
@@ -254,17 +290,19 @@ export function RiftExperience({ trainer, monsters, inventory, portraits, initia
   }, [router]);
 
   if (view === "hub") return <Hub trainer={trainer} monsters={availableMonsters} activeRun={run} onEnter={resumeOrAssemble} />;
-  if (view === "team") return <RiftTeamSelect monsters={availableMonsters} portraits={portraits} selectedIds={selectedIds} onChange={setSelectedIds} onBack={() => setView("hub")} onContinue={() => setView("select")} />;
+  if (view === "team") return <RiftTeamSelect monsters={availableMonsters} selectedIds={selectedIds} onChange={setSelectedIds} onBack={() => setView("hub")} onContinue={() => setView("select")} />;
   if (view === "select") {
     return (
-      <section className="rift-panel animate-fade-in-up" aria-labelledby="rift-select-title">
-        <div className="rift-kicker"><RiftIcon type="rift" className="h-4 w-4" /> Protocol anomaly scan</div>
-        <h1 id="rift-select-title" className="rift-title mt-3">Select a Rift</h1>
-        <p className="rift-copy mt-2">Choose one environment. Difficulty, node levels, signals and boss pressure are set by that route’s configuration.</p>
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          {RIFT_CATALOGUE.map((rift) => <RiftCard key={rift.id} riftId={rift.id} selected={rift.id === selectedRiftId} actionLabel={rift.id === selectedRiftId ? "Begin this expedition" : "Select this Rift"} onChoose={() => rift.id === selectedRiftId ? startRun(rift.id) : setSelectedRiftId(rift.id)} />)}
+      <section className="border-2 border-slate-700 bg-[#07101f] animate-fade-in-up" aria-labelledby="rift-select-title">
+        <div className="border-b border-slate-800 px-4 py-4 sm:px-5">
+          <p className="font-mono text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">Protocol Rift // scan complete</p>
+          <h1 id="rift-select-title" className="mt-1 font-mono text-2xl font-black uppercase tracking-[0.04em] text-slate-100">Confirm your route</h1>
+          <p className="mt-2 text-xs leading-5 text-slate-400">Select a biome once, then begin the generated eight-step expedition.</p>
         </div>
-        <button type="button" onClick={() => setView("team")} className="rift-button-secondary mt-8">Back to team</button>
+        <div className="grid gap-3 p-4 md:grid-cols-2 sm:p-5">
+          {RIFT_CATALOGUE.map((rift) => <RiftCard key={rift.id} riftId={rift.id} selected={rift.id === selectedRiftId} actionLabel={rift.id === selectedRiftId ? "Begin expedition" : "Select biome"} onChoose={() => rift.id === selectedRiftId ? startRun(rift.id) : setSelectedRiftId(rift.id)} />)}
+        </div>
+        <div className="border-t border-slate-800 p-4 sm:p-5"><button type="button" onClick={() => setView("team")} className="border border-slate-600 bg-[#050b17] px-3 py-2 font-mono text-[10px] font-black uppercase tracking-[0.12em] text-slate-300 transition-colors hover:border-amber-300 hover:text-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300">Back to team</button></div>
       </section>
     );
   }
@@ -281,9 +319,9 @@ export function RiftExperience({ trainer, monsters, inventory, portraits, initia
   }
   return (
     <div className="space-y-4 animate-fade-in-up">
-      <div className="grid gap-3 sm:grid-cols-3"><ProtocolMetric label="Signal" value={modifierTotal(run, "signal")} /><ProtocolMetric label="Guard" value={modifierTotal(run, "guard")} /><ProtocolMetric label="Tempo" value={modifierTotal(run, "tempo")} /></div>
+      <div className="grid gap-2 sm:grid-cols-3"><ProtocolMetric label="Signal" value={modifierTotal(run, "signal")} /><ProtocolMetric label="Guard" value={modifierTotal(run, "guard")} /><ProtocolMetric label="Tempo" value={modifierTotal(run, "tempo")} /></div>
       <RiftMapBoard map={map} completedNodeIds={run.completedNodeIds} onEnter={(nodeId) => setRun((current) => current ? enterRiftNode(current, nodeId) : current)} />
-      <p className="rounded-2xl border border-slate-800 bg-slate-950/40 px-5 py-4 text-xs leading-5 text-slate-500">Route state is temporary in this tab. Battle rewards and captures persist safely to your collection.</p>
+      <p className="border border-slate-800 bg-[#07101f] px-4 py-3 text-xs leading-5 text-slate-500">Route state is temporary in this tab. Battle rewards and captures persist safely to your collection.</p>
     </div>
   );
 }

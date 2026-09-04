@@ -1,10 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import type { RiftRunState } from "@/lib/rift/types";
 import { getRiftConfig, getRiftEvent } from "@/lib/rift/config";
-import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
+import { PixelMonster } from "../PixelMonster";
 import { RiftIcon } from "./RiftIcon";
 
 export function RiftSummary({ run, onNewRun }: { run: RiftRunState; onNewRun: () => void }) {
@@ -48,8 +47,8 @@ export function RiftSummary({ run, onNewRun }: { run: RiftRunState; onNewRun: ()
 
       {run.rewards.capture ? (
         <div className="rift-capture-reward mx-auto mt-4 flex max-w-4xl flex-col gap-5 p-5 sm:flex-row sm:items-center sm:p-6">
-          <div className="rift-portrait-vault h-20 w-20 shrink-0 self-center sm:self-auto">
-            <Image src={getMonsterVisualPath(run.rewards.capture.speciesId, "portrait")} alt={`${run.rewards.capture.monsterName} portrait`} fill sizes="80px" className="object-contain p-2 [image-rendering:pixelated]" />
+          <div className="rift-portrait-vault h-16 w-16 shrink-0 self-center sm:self-auto">
+            <PixelMonster speciesId={run.rewards.capture.speciesId} variant="battle-front" alt={`${run.rewards.capture.monsterName} sprite`} className="h-16 w-16 p-1" />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs uppercase tracking-[0.18em] text-cyan-300">Collection synchronized</p>

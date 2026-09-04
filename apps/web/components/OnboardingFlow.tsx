@@ -4,17 +4,11 @@ import { useState, useTransition, type FormEvent } from "react";
 import type { MonsterSpeciesData } from "@chainmon/monster-data";
 import { createTrainerAction } from "@/actions/trainer";
 import { ElementBadge } from "./ElementBadge";
-import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
+import { PixelMonster } from "./PixelMonster";
 
 interface OnboardingFlowProps {
   starters: readonly MonsterSpeciesData[];
 }
-
-const ELEMENT_PREVIEW_STYLES: Record<string, string> = {
-  fire: "from-red-500/20 to-orange-500/5 ring-red-500/30",
-  water: "from-sky-500/20 to-blue-500/5 ring-sky-500/30",
-  nature: "from-emerald-500/20 to-green-500/5 ring-emerald-500/30",
-};
 
 export function OnboardingFlow({ starters }: OnboardingFlowProps) {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
@@ -57,18 +51,17 @@ export function OnboardingFlow({ starters }: OnboardingFlowProps) {
                 key={starter.slug}
                 type="button"
                 onClick={() => setSelectedSlug(starter.slug)}
-                className={`rounded-2xl border bg-gradient-to-br p-4 text-left transition-all ${
+                className={`rounded-2xl border bg-slate-950/70 p-4 text-left transition-all ${
                   selected
                     ? "border-amber-400 ring-2 ring-amber-400/40"
                     : "border-slate-800 hover:border-slate-600"
-                } ${ELEMENT_PREVIEW_STYLES[starter.element]}`}
+                }`}
               >
-                <img
-                  src={getMonsterVisualPath(starter.id, "portrait")}
+                <PixelMonster
+                  speciesId={starter.id}
+                  variant="portrait"
                   alt={starter.name}
-                  width={96}
-                  height={96}
-                  className="mx-auto h-24 w-24 rounded-2xl bg-slate-950/40 object-cover"
+                  className="mx-auto h-32 w-32 bg-slate-950/80 p-2"
                 />
                 <h3 className="mt-3 text-center font-bold text-slate-100">
                   {starter.name}

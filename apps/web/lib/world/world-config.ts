@@ -28,8 +28,8 @@ export const PLAYER_SOURCE_SIZE = 32;
 export const PLAYER_RENDER_SCALE = 1;
 export const PLAYER_SPEED = 180; // px per second at source scale
 
-/** Monster overworld: 32×32 source, rendered at 2.5x (80px). */
-export const MONSTER_OVERWORLD_SCALE = 2.5;
+/** Monster overworld: 32×32 source, rendered at an integer 2× (64px). */
+export const MONSTER_OVERWORLD_SCALE = 2;
 
 /** Max visible wild monsters per world load. */
 export const WORLD_MAX_SPAWNS = 12;

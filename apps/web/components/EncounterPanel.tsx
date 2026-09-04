@@ -3,18 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { CAPTURE_BALLS, type WildEncounter } from "@chainmon/game-engine";
+import { CAPTURE_BALLS, calculateCaptureChance, type WildEncounter } from "@chainmon/game-engine";
 import type { MonsterSpeciesData } from "@chainmon/monster-data";
 import type { Monster } from "@chainmon/shared";
 import type { InventoryEntry } from "@/lib/data";
-import {
-  fleeAction,
-  throwBallAction,
-  type ThrowBallActionResult,
-} from "@/actions/capture";
-import { ElementBadge } from "./ElementBadge";
-import { RarityBadge } from "./RarityBadge";
-import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
+import { fleeAction, throwBallAction, type ThrowBallActionResult } from "@/actions/capture";
+import { PixelMonster } from "./PixelMonster";
+import { RiftIcon } from "./rift/RiftIcon";
 
 type Phase = "idle" | "throwing" | "shaking" | "result";
 
@@ -24,90 +19,51 @@ interface EncounterPanelProps {
   inventory: InventoryEntry[];
 }
 
+function VitalityBar({ current, max }: { current: number; max: number }) {
+  const percentage = Math.max(0, Math.min(100, Math.round((current / Math.max(max, 1)) * 100)));
+  const tone = percentage > 50 ? "bg-emerald-400" : percentage > 20 ? "bg-amber-300" : "bg-rose-400";
+  return <div className="h-2 border border-slate-800 bg-[#050b17]"><div className={`h-full ${tone}`} style={{ width: `${percentage}%` }} /></div>;
+}
+
 function CapturedCard({ monster }: { monster: Monster }) {
   return (
-    <div className="animate-float-up rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-8 text-center">
-      <div className="text-5xl">🎉</div>
-      <h2 className="mt-3 text-2xl font-bold text-emerald-300">
-        Monster Captured!
-      </h2>
-      <p className="mt-1 text-sm text-slate-400">
-        {monster.name} joined your collection with unique DNA.
-      </p>
-      <div className="mx-auto mt-5 max-w-xs rounded-xl bg-slate-950/50 p-4 text-left">
-        <p className="text-lg font-bold text-slate-100">{monster.name}</p>
-        <div className="mt-1 flex gap-1.5">
-          <ElementBadge element={monster.element} />
-          <RarityBadge rarity={monster.rarity} />
-        </div>
-        <dl className="mt-3 grid grid-cols-4 gap-1 text-center text-sm">
-          <div>
-            <dt className="text-[10px] uppercase text-slate-500">HP</dt>
-            <dd className="font-semibold text-emerald-300">{monster.hp}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase text-slate-500">ATK</dt>
-            <dd className="font-semibold text-red-300">{monster.attack}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase text-slate-500">DEF</dt>
-            <dd className="font-semibold text-sky-300">{monster.defense}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] uppercase text-slate-500">SPD</dt>
-            <dd className="font-semibold text-yellow-300">{monster.speed}</dd>
-          </div>
-        </dl>
-      </div>
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <Link
-          href={`/monsters/${monster.id}`}
-          className="rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400"
-        >
-          View Monster
-        </Link>
-        <Link
-          href="/explore"
-          className="rounded-lg border border-slate-700 bg-slate-800/60 px-5 py-2.5 text-sm font-semibold text-slate-200 transition-colors hover:bg-slate-800"
-        >
-          Back to Explore
-        </Link>
-      </div>
-    </div>
+    <section className="animate-float-up border-2 border-emerald-400/70 bg-emerald-400/5 p-5 text-center">
+      <PixelMonster speciesId={monster.speciesId} variant="battle-front" alt={`${monster.name} captured`} className="mx-auto h-16 w-16" priority />
+      <p className="mt-3 font-mono text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">Capture confirmed</p>
+      <h2 className="mt-1 font-mono text-2xl font-black uppercase text-slate-100">{monster.name} captured</h2>
+      <p className="mt-2 text-xs text-slate-400">The creature joined your collection with its server-recorded traits.</p>
+      <div className="mx-auto mt-4 grid max-w-md grid-cols-4 divide-x divide-slate-800 border border-slate-700 bg-[#050b17] font-mono text-xs"><div className="p-2"><span className="block text-[9px] text-slate-500">HP</span><span className="text-emerald-300">{monster.hp}</span></div><div className="p-2"><span className="block text-[9px] text-slate-500">ATK</span><span className="text-amber-200">{monster.attack}</span></div><div className="p-2"><span className="block text-[9px] text-slate-500">DEF</span><span className="text-sky-200">{monster.defense}</span></div><div className="p-2"><span className="block text-[9px] text-slate-500">SPD</span><span className="text-violet-200">{monster.speed}</span></div></div>
+      <div className="mt-5 flex flex-wrap justify-center gap-2"><Link href={`/monsters/${monster.id}`} className="border border-amber-300 bg-amber-300 px-3 py-2 font-mono text-[10px] font-black uppercase tracking-[0.1em] text-slate-950 transition-colors hover:bg-amber-200">View monster</Link><Link href="/explore" className="border border-slate-600 bg-[#050b17] px-3 py-2 font-mono text-[10px] font-black uppercase tracking-[0.1em] text-slate-300 transition-colors hover:border-amber-300 hover:text-amber-100">Back to explore</Link></div>
+    </section>
   );
 }
 
-export function EncounterPanel({
-  encounter,
-  species,
-  inventory,
-}: EncounterPanelProps) {
+export function EncounterPanel({ encounter, species, inventory }: EncounterPanelProps) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("idle");
   const [result, setResult] = useState<ThrowBallActionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const captured = result?.ok && result.result?.outcome === "captured" ? result.result.monster : null;
+  const failed = result?.ok && result.result?.outcome === "failed";
+  const basicBall = CAPTURE_BALLS[0];
+  const baseChance = species && basicBall ? Math.round(calculateCaptureChance({ catchRate: species.catchRate, currentHp: encounter.currentHp, maxHp: encounter.maxHp, ballModifier: basicBall.modifier }) * 100) : 0;
 
   function handleThrow(ballSlug: string) {
     if (pending) return;
     setError(null);
     setResult(null);
     setPhase("throwing");
-
     const formData = new FormData();
     formData.set("encounterId", encounter.id);
     formData.set("ballSlug", ballSlug);
-
     startTransition(async () => {
       const response = await throwBallAction(formData);
       setPhase("shaking");
       window.setTimeout(() => {
         setPhase("result");
         setResult(response);
-        if (response.ok && response.result?.outcome === "failed") {
-          // Refresh server props so remaining ball counts stay accurate.
-          router.refresh();
-        }
+        if (response.ok && response.result?.outcome === "failed") router.refresh();
       }, 1600);
     });
   }
@@ -116,133 +72,29 @@ export function EncounterPanel({
     if (pending) return;
     const formData = new FormData();
     formData.set("encounterId", encounter.id);
-    startTransition(async () => {
-      await fleeAction(formData);
-    });
+    startTransition(async () => { await fleeAction(formData); });
   }
 
-  const captured =
-    result?.ok && result.result?.outcome === "captured"
-      ? result.result.monster
-      : null;
-  const failed = result?.ok && result.result?.outcome === "failed";
-
   return (
-    <div className="space-y-6">
-      {/* Wild monster card */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-8 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-400">
-          A Wild Monster Appeared!
-        </p>
-        <img
-          src={species ? getMonsterVisualPath(species.id, "portrait") : "/monsters/placeholder.svg"}
-          alt={encounter.speciesName}
-          width={160}
-          height={160}
-          className="mx-auto mt-4 h-40 w-40 rounded-2xl bg-slate-950/40 object-cover"
-        />
-        <h1 className="mt-4 text-2xl font-bold text-slate-100">
-          {encounter.speciesName}
-        </h1>
-        <div className="mt-2 flex justify-center gap-1.5">
-          <ElementBadge element={encounter.element} />
-          <RarityBadge rarity={encounter.rarity} />
-          <span className="rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-300 ring-1 ring-amber-500/30">
-            Lv {encounter.level}
-          </span>
+    <div className="space-y-4">
+      <section className="border-2 border-slate-700 bg-[#07101f]" aria-labelledby="encounter-title">
+        <div className="flex items-center justify-between border-b border-slate-800 px-4 py-3"><div><p className="font-mono text-[9px] font-black uppercase tracking-[0.16em] text-amber-300">Wild encounter // capture active</p><h1 id="encounter-title" className="mt-1 font-mono text-lg font-black uppercase text-slate-100">{encounter.speciesName}</h1></div><p className="font-mono text-[10px] font-black uppercase tracking-[0.1em] text-amber-200">Lv {encounter.level}</p></div>
+        <div className="relative min-h-[29rem] overflow-hidden bg-[#050b17] sm:min-h-[16rem] lg:min-h-[31rem]">
+          <div className="bg-grid absolute inset-0 opacity-30" aria-hidden="true" />
+          <p className="absolute left-4 top-4 z-10 font-mono text-[9px] font-black uppercase tracking-[0.14em] text-slate-500">WILD SIGNAL // {encounter.element} · {encounter.rarity}</p>
+          {species ? <div className="absolute left-1/2 top-[44%] z-10 -translate-x-1/2 -translate-y-1/2"><div className="lg:hidden"><PixelMonster speciesId={species.id} variant="battle-front" scale={2} alt={`${encounter.speciesName} wild battle sprite`} priority className="h-32 w-32" /></div><div className="hidden lg:block"><PixelMonster speciesId={species.id} variant="battle-front" scale={3} alt={`${encounter.speciesName} wild battle sprite`} priority className="h-48 w-48" /></div></div> : null}
+          <div className="absolute inset-x-4 bottom-4 z-10 border border-slate-700 bg-[#07101f] p-3 sm:inset-x-8 sm:bottom-6">
+            <div className="flex items-center justify-between gap-3"><div><p className="font-mono text-[9px] font-black uppercase tracking-[0.12em] text-slate-500">Wild {encounter.speciesName}</p><p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-slate-300">HP {encounter.currentHp} / {encounter.maxHp}</p></div><p className="font-mono text-[10px] font-black uppercase text-amber-200">Base lock {baseChance}%</p></div>
+            <div className="mt-2"><VitalityBar current={encounter.currentHp} max={encounter.maxHp} /></div>
+          </div>
         </div>
-        <p className="mt-3 text-sm text-slate-400">
-          HP {encounter.currentHp} / {encounter.maxHp}
-        </p>
-      </div>
+      </section>
 
-      {/* Throw / animation zone */}
-      {captured ? (
-        <CapturedCard monster={captured} />
-      ) : (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-          {phase === "idle" || phase === "result" ? (
-            <>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-                Choose a Capture Ball
-              </h2>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {CAPTURE_BALLS.map((ball) => {
-                  const entry = inventory.find((i) => i.slug === ball.slug);
-                  const quantity = entry?.quantity ?? 0;
-                  const disabled = quantity <= 0 || pending;
-                  return (
-                    <button
-                      key={ball.slug}
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => handleThrow(ball.slug)}
-                      className={`rounded-xl border px-4 py-4 text-center transition-colors ${
-                        disabled
-                          ? "cursor-not-allowed border-slate-800 bg-slate-950/60 opacity-50"
-                          : "border-slate-700 bg-slate-800/60 hover:border-amber-500/50 hover:bg-slate-800"
-                      }`}
-                    >
-                      <span className="text-2xl">
-                        {ball.slug === "basic-ball"
-                          ? "🔴"
-                          : ball.slug === "great-ball"
-                            ? "🔵"
-                            : "🟣"}
-                      </span>
-                      <p className="mt-1 text-sm font-semibold text-slate-200">
-                        {ball.name}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {ball.modifier.toFixed(2)}x · × {quantity}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-5 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={handleFlee}
-                  disabled={pending}
-                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-200 disabled:opacity-50"
-                >
-                  Run Away
-                </button>
-                {phase === "result" ? (
-                  <p
-                    className={`text-sm font-semibold ${
-                      failed ? "text-red-300" : "text-slate-400"
-                    }`}
-                  >
-                    {failed ? "Capture Failed! The ball broke." : ""}
-                  </p>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <div className="py-10 text-center">
-              <div
-                className={`mx-auto h-20 w-20 rounded-full bg-gradient-to-br from-red-500 to-red-700 ring-4 ring-slate-700 ${
-                  phase === "shaking" ? "animate-ball-shake" : ""
-                }`}
-              >
-                <div className="mx-auto mt-8 h-2 w-12 rounded-full bg-slate-950" />
-              </div>
-              <p className="mt-6 text-sm font-semibold text-slate-300">
-                {phase === "throwing" ? "Throwing..." : "Shake! Shake! Shake!"}
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {error ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-          {error}
-        </p>
-      ) : null}
+      {captured ? <CapturedCard monster={captured} /> : <section className="border border-slate-700 bg-[#07101f]" aria-labelledby="capture-inventory-title">
+        <div className="flex items-end justify-between border-b border-slate-800 px-4 py-3"><div><p className="font-mono text-[9px] font-black uppercase tracking-[0.16em] text-slate-500">Capture inventory</p><h2 id="capture-inventory-title" className="mt-1 font-mono text-sm font-black uppercase text-slate-100">Choose a capture ball</h2></div><p className="font-mono text-[9px] uppercase tracking-[0.1em] text-slate-500">Base chance {baseChance}%</p></div>
+        {phase === "idle" || phase === "result" ? <><div className="grid gap-2 p-4 sm:grid-cols-3">{CAPTURE_BALLS.map((ball) => { const quantity = inventory.find((entry) => entry.slug === ball.slug)?.quantity ?? 0; const disabled = quantity <= 0 || pending; const chance = species ? Math.round(calculateCaptureChance({ catchRate: species.catchRate, currentHp: encounter.currentHp, maxHp: encounter.maxHp, ballModifier: ball.modifier }) * 100) : 0; const tone = ball.slug === "basic-ball" ? "border-rose-300/70 text-rose-200" : ball.slug === "great-ball" ? "border-sky-300/70 text-sky-200" : "border-violet-300/70 text-violet-200"; return <button key={ball.slug} type="button" disabled={disabled} onClick={() => handleThrow(ball.slug)} className={`min-h-32 border bg-[#050b17] p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${disabled ? "cursor-not-allowed border-slate-800 opacity-40" : `${tone} hover:bg-slate-900`}`}><span className={`grid h-8 w-8 place-items-center border ${tone}`}><RiftIcon type="capsule" className="h-5 w-5" /></span><p className="mt-3 font-mono text-xs font-black uppercase text-slate-100">{ball.name}</p><p className="mt-1 font-mono text-[9px] uppercase tracking-[0.1em] text-slate-500">{chance}% lock · ×{quantity}</p></button>; })}</div><div className="flex items-center justify-between border-t border-slate-800 px-4 py-3"><button type="button" onClick={handleFlee} disabled={pending} className="border border-slate-600 bg-[#050b17] px-3 py-2 font-mono text-[10px] font-black uppercase tracking-[0.1em] text-slate-300 transition-colors hover:border-amber-300 hover:text-amber-100 disabled:opacity-40">Run away</button>{phase === "result" && failed ? <p className="font-mono text-[10px] font-black uppercase text-rose-300">Capture failed // signal escaped</p> : null}</div></> : <div className="grid min-h-52 place-items-center p-5 text-center"><div><div className={`mx-auto grid h-16 w-16 place-items-center border-2 border-amber-300 bg-[#050b17] text-amber-200 ${phase === "shaking" ? "animate-ball-shake" : ""}`}><RiftIcon type="capsule" className="h-8 w-8" /></div><p className="mt-4 font-mono text-[10px] font-black uppercase tracking-[0.14em] text-slate-300">{phase === "throwing" ? "Capsule deployed" : "Capture roll resolving"}</p></div></div>}
+      </section>}
+      {error ? <p role="alert" className="border border-rose-400/50 bg-rose-400/10 px-3 py-2 text-xs text-rose-200">{error}</p> : null}
     </div>
   );
 }

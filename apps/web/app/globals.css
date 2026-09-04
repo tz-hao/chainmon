@@ -694,8 +694,8 @@ body {
 .rift-capture-target {
   position: absolute;
   z-index: 2;
-  height: 3.4rem;
-  width: 3.4rem;
+  height: 4rem;
+  width: 4rem;
   overflow: hidden;
   border: 1px solid rgb(103 232 249 / 0.52);
   border-radius: 0.8rem;
@@ -703,9 +703,53 @@ body {
   box-shadow: 0 0 0 0.25rem rgb(8 47 73 / 0.46), 0 8px 20px rgb(8 145 178 / 0.16);
 }
 
+.pixel-card {
+  box-shadow: inset 0 0 0 1px rgb(148 163 184 / 0.06), 0 8px 20px rgb(2 6 23 / 0.2);
+}
+
+.pixel-monster-motion .pixel-monster-sprite {
+  animation: pixel-monster-idle 1.25s steps(2, end) infinite;
+  transform-origin: center bottom;
+}
+
+.pixel-monster-motion[data-motion="attack"] .pixel-monster-sprite {
+  animation: pixel-monster-attack 520ms steps(4, end) both;
+}
+
+.pixel-monster-motion[data-motion="hit"] .pixel-monster-sprite {
+  animation: pixel-monster-hit 420ms steps(3, end) both;
+}
+
+.pixel-monster-motion[data-motion="faint"] .pixel-monster-sprite {
+  animation: pixel-monster-faint 420ms steps(3, end) both;
+}
+
 @keyframes rift-orbit {
   0%, 100% { transform: rotate(0deg) scale(1); }
   50% { transform: rotate(180deg) scale(1.035); }
+}
+
+@keyframes pixel-monster-idle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes pixel-monster-attack {
+  0% { transform: translateX(0); }
+  45% { transform: translateX(14px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes pixel-monster-hit {
+  0% { filter: brightness(1); transform: translateX(0); }
+  30% { filter: brightness(1.8); transform: translateX(-5px); }
+  60% { filter: brightness(1.35); transform: translateX(4px); }
+  100% { filter: brightness(1); transform: translateX(0); }
+}
+
+@keyframes pixel-monster-faint {
+  0% { filter: grayscale(0); opacity: 1; transform: translateY(0); }
+  100% { filter: grayscale(1); opacity: 0.45; transform: translateY(10px); }
 }
 
 @keyframes rift-route-flow {

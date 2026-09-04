@@ -25,7 +25,7 @@ import {
 } from "../../lib/world/world-config";
 import { seededRandom } from "../../lib/world/zones";
 import { getMonsterVisualPath } from "../../lib/world/monster-visuals";
-import { ensureMonsterTexture, ensurePlayerTextures } from "../textures/pixel-art";
+import { ensurePlayerTextures } from "../textures/trainer-textures";
 
 const EMPTY_WORLD_STATE: WorldStateResponse = {
   trainer: {
@@ -244,13 +244,10 @@ export class WorldScene extends Phaser.Scene {
     const worldState = this.game.registry.get("worldState") as WorldStateResponse;
     for (const spawn of worldState.spawns ?? []) {
       const assetTextureKey = this.monsterTextureKey(spawn.speciesId);
-      const textureKey = this.textures.exists(assetTextureKey)
-        ? assetTextureKey
-        : ensureMonsterTexture(this, spawn.speciesId, `monster-${spawn.speciesId}`);
       const px = spawn.x * WORLD_TILE_SIZE + WORLD_TILE_SIZE / 2;
       const py = spawn.y * WORLD_TILE_SIZE + WORLD_TILE_SIZE / 2;
       const sprite = this.physics.add
-        .sprite(px, py, textureKey)
+        .sprite(px, py, assetTextureKey)
         .setScale(MONSTER_OVERWORLD_SCALE)
         .setCollideWorldBounds(true)
         .setDepth(5);

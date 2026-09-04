@@ -3,12 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type FormEvent } from "react";
 import type { EvolutionEligibility } from "@chainmon/game-engine";
-import type { MonsterSpeciesData } from "@chainmon/monster-data";
+import { getSpeciesById, type MonsterSpeciesData } from "@chainmon/monster-data";
 import type { Monster } from "@chainmon/shared";
 import { evolveMonsterAction } from "@/actions/evolution";
 import { ElementBadge } from "./ElementBadge";
+import { getEvolutionVisualLine } from "@/lib/world/monster-visuals";
+import { PixelMonster } from "./PixelMonster";
 import { RarityBadge } from "./RarityBadge";
-import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
 
 interface EvolutionPanelProps {
   monster: Monster;
@@ -16,6 +17,91 @@ interface EvolutionPanelProps {
   target: MonsterSpeciesData | undefined;
   eligibility: EvolutionEligibility;
   inventory: { slug: string; name: string; quantity: number }[];
+}
+
+function EvolutionTrack({ speciesId }: { speciesId: number }) {
+  const line = getEvolutionVisualLine(speciesId);
+  const currentIndex = Math.max(
+    0,
+    line.findIndex((stage) => stage.speciesId === speciesId),
+  );
+
+  return (
+    <div className="border border-slate-700 bg-[#080e18] p-2 sm:p-3">
+      <div className="flex items-center justify-between border-b border-slate-800 pb-2 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
+        <span>Evolution Line</span>
+        <span className="text-amber-300">Stage {currentIndex + 1} online</span>
+      </div>
+      <ol className="mt-2 grid gap-2 sm:grid-cols-3 sm:gap-3">
+        {line.map((stage, index) => {
+          const isCurrent = index === currentIndex;
+          const isFuture = index > currentIndex;
+          const stageSpecies = getSpeciesById(stage.speciesId);
+          const tone = isCurrent
+            ? "border-amber-300 bg-[#292112] text-amber-100"
+            : isFuture
+              ? "border-slate-800 bg-[#0d1420] text-slate-600 opacity-55"
+              : "border-emerald-800 bg-[#0c1b1b] text-emerald-300";
+
+          return (
+            <li
+              key={stage.speciesId}
+              className={`relative flex items-center gap-3 border p-2 sm:block sm:min-h-[13rem] sm:p-3 ${tone}`}
+            >
+              <span className="absolute left-2 top-2 border border-current px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em]">
+                Stage {index + 1}
+              </span>
+              <div className="mt-3 shrink-0 sm:mt-6 sm:flex sm:justify-center">
+                <div className="sm:hidden">
+                  <PixelMonster
+                    speciesId={stage.speciesId}
+                    variant="battle-front"
+                    scale={1}
+                    alt={stage.displayName}
+                    priority
+                  />
+                </div>
+                <div className="hidden sm:block">
+                  <PixelMonster
+                    speciesId={stage.speciesId}
+                    variant="portrait"
+                    scale={1}
+                    alt={stage.displayName}
+                    priority
+                  />
+                </div>
+              </div>
+              <div className="min-w-0 sm:mt-2 sm:text-center">
+                <p className="truncate font-pixel text-xs uppercase tracking-[0.08em] text-slate-100 sm:text-sm">
+                  {stageSpecies?.name ?? stage.displayName}
+                </p>
+                <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-slate-500">
+                  {isCurrent ? "Current form" : isFuture ? "Future form" : "Recorded form"}
+                </p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function RequirementRow({
+  label,
+  value,
+  ready,
+}: {
+  label: string;
+  value: string;
+  ready: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-slate-800 py-2 font-mono text-[11px] uppercase tracking-[0.08em]">
+      <dt className="text-slate-500">{label}</dt>
+      <dd className={ready ? "text-emerald-300" : "text-amber-300"}>{value}</dd>
+    </div>
+  );
 }
 
 export function EvolutionPanel({
@@ -37,7 +123,9 @@ export function EvolutionPanel({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const fireStone = inventory.find((i) => i.slug === "fire-stone")?.quantity ?? 0;
+  const fireStone = inventory.find((item) => item.slug === "fire-stone")?.quantity ?? 0;
+  const evolutionLevel = species?.evolution?.level ?? 1;
+  const requiresItem = Boolean(species?.evolution?.item);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,195 +148,129 @@ export function EvolutionPanel({
     });
   }
 
-  // ---- Success state ----
   if (result) {
     const evolved = result.monster;
     return (
-      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6">
-        <p className="text-sm font-semibold uppercase tracking-wider text-emerald-300">
-          Evolution Complete!
-        </p>
-        <div className="mt-4 flex items-center gap-4">
-          <img
-            src={species ? getMonsterVisualPath(species.id, "portrait") : "/monsters/placeholder.svg"}
-            alt=""
-            width={72}
-            height={72}
-            className="h-20 w-20 rounded-xl bg-slate-950/40 object-cover"
-          />
-          <span className="text-2xl text-slate-500">↓</span>
-          <img
-            src={target ? getMonsterVisualPath(target.id, "portrait") : "/monsters/placeholder.svg"}
-            alt=""
-            width={72}
-            height={72}
-            className="h-20 w-20 rounded-xl bg-slate-950/40 object-cover"
-          />
+      <section className="border-2 border-emerald-500 bg-[#0b1a1b] p-3 sm:p-4">
+        <div className="flex items-center justify-between gap-3 border-b border-emerald-900 pb-2">
+          <div>
+            <p className="font-pixel text-sm uppercase tracking-[0.12em] text-emerald-300">Evolution complete</p>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-slate-500">Identity and battle history retained</p>
+          </div>
+          <span className="border border-emerald-500 px-2 py-1 font-mono text-[10px] uppercase text-emerald-200">Synced</span>
         </div>
-        <p className="mt-3 text-lg font-bold text-slate-100">
-          {species?.name} → {evolved.name}
-        </p>
-        <div className="mt-1 flex gap-1.5">
-          <ElementBadge element={evolved.element} />
-          <RarityBadge rarity={evolved.rarity} />
+        <div className="mt-3">
+          <EvolutionTrack speciesId={evolved.speciesId} />
         </div>
-        <dl className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-          {[
-            { label: "HP", before: result.oldHp, after: evolved.hp },
-            { label: "Attack", before: result.oldAttack, after: evolved.attack },
-            { label: "Defense", before: result.oldDefense, after: evolved.defense },
-            { label: "Speed", before: result.oldSpeed, after: evolved.speed },
-          ].map((row) => (
-            <div key={row.label} className="rounded-xl bg-slate-800/60 p-3 text-center">
-              <p className="text-xs text-slate-500">{row.label}</p>
-              <p className="mt-1 font-bold text-emerald-300">
-                {row.before} → {row.after}
-              </p>
-            </div>
-          ))}
-        </dl>
-        <p className="mt-3 text-xs text-slate-500">
-          DNA, level and battle history are preserved.
-        </p>
-      </div>
+        <div className="mt-3 border border-emerald-900 bg-[#081314] p-3">
+          <p className="font-mono text-[11px] uppercase tracking-[0.1em] text-slate-400">
+            {species?.name} evolved into <span className="text-emerald-300">{evolved.name}</span>
+          </p>
+          <dl className="mt-2 grid grid-cols-2 gap-x-4 sm:grid-cols-4">
+            {[
+              { label: "HP", before: result.oldHp, after: evolved.hp },
+              { label: "ATK", before: result.oldAttack, after: evolved.attack },
+              { label: "DEF", before: result.oldDefense, after: evolved.defense },
+              { label: "SPD", before: result.oldSpeed, after: evolved.speed },
+            ].map((row) => (
+              <div key={row.label} className="border-t border-emerald-950 py-2 font-mono text-[10px] uppercase">
+                <dt className="text-slate-500">{row.label}</dt>
+                <dd className="mt-1 text-emerald-300">{row.before} → {row.after}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
     );
   }
 
   if (!species?.evolution?.evolvesTo || !target) {
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-          Evolution
-        </h2>
-        <p className="mt-2 text-sm text-slate-400">
-          This monster has no evolution route.
-        </p>
-      </div>
+      <section className="border-2 border-slate-700 bg-[#0c1420] p-3 sm:p-4">
+        <p className="font-pixel text-sm uppercase tracking-[0.12em] text-slate-300">Evolution</p>
+        <p className="mt-2 font-mono text-xs text-slate-500">No further evolution route is recorded for this form.</p>
+      </section>
     );
   }
 
-  // Minted monsters evolve on-chain first (see Web3Panel — On-chain Evolution).
   if (monster.mintStatus === "MINT_CONFIRMED") {
     return (
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-          Evolution
-        </h2>
-        <p className="mt-2 text-sm text-slate-400">
-          This monster is minted as an NFT — evolution runs on-chain first
-          (level / item / route validated by the server), then the game state
-          is synced. Use{" "}
-          <span className="font-semibold text-amber-300">On-chain Evolution</span>{" "}
-          in the On-chain Asset panel.
+      <section className="border-2 border-slate-700 bg-[#0c1420] p-3 sm:p-4">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-800 pb-2">
+          <div>
+            <p className="font-pixel text-sm uppercase tracking-[0.12em] text-slate-200">Evolution protocol</p>
+            <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-slate-500">On-chain asset detected</p>
+          </div>
+          <span className="border border-amber-500 px-2 py-1 font-mono text-[10px] uppercase text-amber-300">Chain first</span>
+        </div>
+        <div className="mt-3"><EvolutionTrack speciesId={monster.speciesId} /></div>
+        <p className="mt-3 font-mono text-xs leading-5 text-slate-400">
+          Use <span className="text-amber-300">On-chain Evolution</span> in the asset panel. The server validates level, item and route before game state syncs.
         </p>
-      </div>
+      </section>
     );
   }
 
-  const requiresItem = Boolean(species.evolution.item);
-
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">
-        Evolution
-      </h2>
-
-      <div className="mt-4 flex items-center gap-4">
-        <img
-          src={getMonsterVisualPath(species.id, "portrait")}
-          alt=""
-          width={64}
-          height={64}
-          className="h-16 w-16 rounded-xl bg-slate-950/40 object-cover"
-        />
-        <span className="text-xl text-slate-500">↓</span>
-        <img
-          src={getMonsterVisualPath(target.id, "portrait")}
-          alt=""
-          width={64}
-          height={64}
-          className="h-16 w-16 rounded-xl bg-slate-950/40 object-cover"
-        />
-        <p className="font-bold text-slate-100">{target.name}</p>
+    <section className="border-2 border-slate-700 bg-[#0c1420] p-3 sm:p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-800 pb-2">
+        <div>
+          <p className="font-pixel text-sm uppercase tracking-[0.12em] text-slate-200">Evolution protocol</p>
+          <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.1em] text-slate-500">Advance {species.name} to {target.name}</p>
+        </div>
+        <span className="border border-slate-600 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.08em] text-slate-400">
+          Route verified
+        </span>
       </div>
 
-      <dl className="mt-4 space-y-2 text-sm">
-        <div className="flex items-center justify-between">
-          <dt className="text-slate-500">Required Level</dt>
-          <dd className={eligibility.eligible ? "text-emerald-300" : "text-slate-300"}>
-            {species.evolution.level ?? 1}{" "}
-            {monster.level >= (species.evolution.level ?? 1) ? "✅" : `(current ${monster.level})`}
-          </dd>
-        </div>
-        {requiresItem ? (
-          <div className="flex items-center justify-between">
-            <dt className="text-slate-500">
-              {species.evolution.item} ×1
-            </dt>
-            <dd className={fireStone > 0 ? "text-emerald-300" : "text-red-300"}>
-              {fireStone > 0 ? `✅ (you have ${fireStone})` : "❌ not in your bag"}
-            </dd>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between">
-            <dt className="text-slate-500">Evolution Item</dt>
-            <dd className="text-emerald-300">Not required</dd>
-          </div>
-        )}
+      <div className="mt-3"><EvolutionTrack speciesId={monster.speciesId} /></div>
+
+      <dl className="mt-3 border border-slate-800 bg-[#080e18] px-3">
+        <RequirementRow
+          label="Required level"
+          ready={monster.level >= evolutionLevel}
+          value={monster.level >= evolutionLevel ? `${evolutionLevel} ready` : `${evolutionLevel} / current ${monster.level}`}
+        />
+        <RequirementRow
+          label={requiresItem ? `${species.evolution.item} x1` : "Evolution item"}
+          ready={!requiresItem || fireStone > 0}
+          value={requiresItem ? (fireStone > 0 ? `Bag ${fireStone}` : "Not in bag") : "Not required"}
+        />
       </dl>
 
       {confirming ? (
-        <form onSubmit={handleSubmit} className="mt-5 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
-          <p className="text-sm text-amber-200">
-            Evolve {species.name} into {target.name}?
-            {requiresItem ? (
-              <span className="block text-xs text-amber-300/80">
-                This will consume {species.evolution.item} ×1.
-              </span>
-            ) : null}
+        <form onSubmit={handleSubmit} className="mt-3 border border-amber-500 bg-[#211b11] p-3">
+          <p className="font-mono text-xs uppercase tracking-[0.08em] text-amber-100">
+            Confirm evolution: {species.name} → {target.name}
           </p>
+          {requiresItem ? (
+            <p className="mt-1 font-mono text-[10px] uppercase text-amber-300/80">Consumes {species.evolution.item} x1</p>
+          ) : null}
           <input type="hidden" name="monsterId" value={monster.id} />
-          <div className="mt-3 flex gap-2">
-            <button
-              type="submit"
-              disabled={pending}
-              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-400 disabled:opacity-50"
-            >
-              {pending ? "Evolving..." : "Confirm Evolution"}
+          <div className="mt-3 grid gap-2 sm:flex">
+            <button type="submit" disabled={pending} className="rift-button-primary disabled:cursor-not-allowed disabled:opacity-50">
+              {pending ? "Evolving..." : "Confirm evolution"}
             </button>
-            <button
-              type="button"
-              onClick={() => setConfirming(false)}
-              disabled={pending}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-400 transition-colors hover:text-slate-200"
-            >
+            <button type="button" onClick={() => setConfirming(false)} disabled={pending} className="rift-button-secondary disabled:cursor-not-allowed disabled:opacity-50">
               Cancel
             </button>
           </div>
-          {error ? (
-            <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
-              {error}
-            </p>
-          ) : null}
+          {error ? <p className="mt-3 border border-red-500 bg-red-950/40 px-3 py-2 font-mono text-xs text-red-200">{error}</p> : null}
         </form>
       ) : (
         <button
           type="button"
           onClick={() => setConfirming(true)}
           disabled={!eligibility.eligible}
-          className={`mt-5 w-full rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
-            eligibility.eligible
-              ? "bg-amber-500 text-slate-950 hover:bg-amber-400"
-              : "cursor-not-allowed bg-slate-800 text-slate-500"
-          }`}
+          className="rift-button-primary mt-3 w-full disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-800 disabled:text-slate-500"
         >
           {eligibility.eligible
             ? `Evolve to ${target.name}`
             : eligibility.missingLevel
-              ? `Requires Level ${eligibility.missingLevel}`
-              : `Requires ${species.evolution.item ?? ""} ×1`}
+              ? `Requires level ${eligibility.missingLevel}`
+              : `Requires ${species.evolution.item ?? ""} x1`}
         </button>
       )}
-    </div>
+    </section>
   );
 }

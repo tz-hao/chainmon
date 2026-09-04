@@ -15,6 +15,7 @@ import {
   NATIVE_CURRENCY_SYMBOL,
 } from "@/lib/web3/chain";
 import { ElementBadge } from "./ElementBadge";
+import { PixelMonster } from "./PixelMonster";
 import { RarityBadge } from "./RarityBadge";
 
 interface ListingView {
@@ -245,16 +246,12 @@ export function MarketplacePage({
               key={listing.id}
               className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4"
             >
-              <img
-                src={`/monsters/${listing.monster.speciesId}.svg`}
+              <PixelMonster
+                speciesId={listing.monster.speciesId}
+                variant="battle-front"
                 alt=""
-                width={64}
-                height={64}
-                className="h-16 w-16 rounded-xl bg-slate-950/40 object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src =
-                    "/monsters/placeholder.svg";
-                }}
+                decorative
+                className="h-16 w-16 bg-slate-950/80 p-1"
               />
               <div className="mt-2 flex items-center justify-between">
                 <p className="font-bold text-slate-100">

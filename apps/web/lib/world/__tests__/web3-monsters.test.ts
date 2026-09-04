@@ -2,7 +2,13 @@ import { getSpeciesById, getSkillById, MONSTER_SPECIES, SKILLS } from "@chainmon
 import { existsSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
-import { MONSTER_VISUALS, getMonsterVisualPath, getVisualBySpeciesId, paletteForSpecies, shapeForSpecies } from "../monster-visuals";
+import {
+  getEvolutionVisualLine,
+  getMonsterVisualPath,
+  getVisualBySpeciesId,
+  MONSTER_VISUAL_DIMENSIONS,
+  MONSTER_VISUALS,
+} from "../monster-visuals";
 
 describe("Web3 monster data (21-28)", () => {
   const web3 = MONSTER_SPECIES.filter((s) => s.id >= 21);
@@ -108,11 +114,19 @@ describe("monster visual manifest", () => {
     }
   });
 
-  it("assigns every species a palette and a silhouette", () => {
+  it("records native dimensions, pixel rendering and only real evolution links", () => {
+    expect(MONSTER_VISUAL_DIMENSIONS).toEqual({
+      overworld: 32,
+      "battle-front": 64,
+      portrait: 128,
+    });
     for (let id = 1; id <= 28; id++) {
-      expect(paletteForSpecies(id).body).toMatch(/^#/);
-      expect(shapeForSpecies(id).length).toBeGreaterThan(0);
-      expect(getSpeciesById(id)).toBeDefined();
+      const visual = getVisualBySpeciesId(id);
+      expect(visual.displayName).toBe(getSpeciesById(id)?.name);
+      expect(visual.pixelRenderingMode).toBe("pixelated");
+      expect(visual.evolutionStage).toBeGreaterThanOrEqual(1);
     }
+    expect(getEvolutionVisualLine(2).map((entry) => entry.speciesId)).toEqual([1, 2, 3]);
+    expect(getEvolutionVisualLine(21).map((entry) => entry.speciesId)).toEqual([21]);
   });
 });

@@ -1,7 +1,5 @@
-import { MONSTER_SPECIES } from "@chainmon/monster-data";
 import { RiftExperience } from "@/components/rift/RiftExperience";
 import { requirePageTrainer } from "@/lib/auth/current-trainer";
-import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
 
 export const dynamic = "force-dynamic";
 
@@ -12,12 +10,6 @@ export default async function RiftPage() {
     repository.getInventory(trainer.id),
     repository.getTeam(trainer.id),
   ]);
-  const portraits = Object.fromEntries(
-    MONSTER_SPECIES.map((species) => [
-      species.id,
-      getMonsterVisualPath(species.id, "portrait"),
-    ]),
-  ) as Record<number, string>;
   const monsters = collection.map((monster) => ({
     id: monster.id,
     speciesId: monster.speciesId,
@@ -36,7 +28,6 @@ export default async function RiftPage() {
       trainer={trainer}
       monsters={monsters}
       inventory={inventory}
-      portraits={portraits}
       initialTeamIds={team?.map((monster) => monster.id) ?? []}
     />
   );

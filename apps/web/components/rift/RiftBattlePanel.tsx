@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import type {
   BattleAction,
@@ -9,7 +8,7 @@ import type {
 } from "@chainmon/game-engine";
 import type { BattleRewardSettlement } from "@/lib/data";
 import type { RiftId, RiftNode } from "@/lib/rift/types";
-import { getMonsterVisualPath } from "@/lib/world/monster-visuals";
+import { PixelMonster } from "../PixelMonster";
 import { RiftIcon } from "./RiftIcon";
 
 interface BattlePayload {
@@ -168,8 +167,8 @@ export function RiftBattlePanel({
       <div key={state.turn} className="mt-8 grid gap-4 lg:grid-cols-[1fr_auto_1fr] lg:items-center">
         <article className={`rift-combatant rift-combatant--player border p-5 ${playerWasHit ? "rift-combatant--impact" : ""}`} data-impact={playerWasHit || undefined}>
           <div className="flex items-center gap-4">
-            <div className="rift-portrait-vault h-28 w-28 shrink-0">
-              <Image src={getMonsterVisualPath(player.speciesId, "portrait")} alt={`${player.speciesName} battle portrait`} fill sizes="112px" className="object-contain p-2 [image-rendering:pixelated]" />
+            <div className="rift-portrait-vault h-32 w-32 shrink-0 pixel-monster-motion" data-motion={player.fainted ? "faint" : playerWasHit ? "hit" : pending ? "attack" : "idle"}>
+              <PixelMonster speciesId={player.speciesId} variant="battle-front" scale={2} alt={`${player.speciesName} battle sprite`} className="pixel-monster-sprite h-32 w-32 p-2" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-200">Your active unit · Lv {player.level}</p>
@@ -183,8 +182,8 @@ export function RiftBattlePanel({
         <div className="mx-auto text-center"><div className="rift-versus-core" aria-label="versus"><span>VS</span></div>{pending ? <p className="mt-3 font-mono text-[9px] uppercase tracking-[0.15em] text-amber-200">Enemy action</p> : null}</div>
         <article className={`rift-combatant rift-combatant--enemy border p-5 ${node.type === "boss" ? "rift-combatant--boss" : ""} ${opponentWasHit ? "rift-combatant--impact" : ""}`} data-impact={opponentWasHit || undefined}>
           <div className="flex items-center gap-4 lg:flex-row-reverse lg:text-right">
-            <div className="rift-portrait-vault h-28 w-28 shrink-0">
-              <Image src={getMonsterVisualPath(opponent.speciesId, "portrait")} alt={`${opponent.speciesName} battle portrait`} fill sizes="112px" className="object-contain p-2 [image-rendering:pixelated]" />
+            <div className="rift-portrait-vault h-32 w-32 shrink-0 pixel-monster-motion" data-motion={opponent.fainted ? "faint" : opponentWasHit ? "hit" : "idle"}>
+              <PixelMonster speciesId={opponent.speciesId} variant="battle-front" scale={2} alt={`${opponent.speciesName} battle sprite`} className="pixel-monster-sprite h-32 w-32 p-2" />
             </div>
             <div className="min-w-0 flex-1">
               <p className={`text-[10px] uppercase tracking-[0.18em] ${node.type === "boss" ? "text-rose-200" : "text-violet-200"}`}>Hostile signal · Lv {opponent.level}</p>
